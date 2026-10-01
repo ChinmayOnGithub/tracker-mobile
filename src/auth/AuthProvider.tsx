@@ -1,36 +1,72 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { clearToken, getToken, setToken, trackerApi, type MobileUser } from '@/api/client'
-
-type AuthContextValue = {
-  user: MobileUser | null
-  isLoading: boolean
-  isAuthenticated: boolean
-  login: (username: string, pin: string) => Promise<void>
-  logout: () => Promise<void>
-}
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type PropsWithChildren,
+} from 'react'
+import { clearToken, getToken, setToken, trackerApi } from '@/api/client'
+import type { MobileUser } from '@/api/types'
+import type { AuthContextValue } from './types'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<MobileUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const restore = useCallback(async () => {
-    const token = await getToken()
-    if (!token) return
-    try {
-      setUser(await trackerApi.me())
-    } catch {
-      await clearToken()
-      setUser(null)
-    }
+  const clearError = useCallback(() => {
+    setError(null)
   }, [])
 
   useEffect(() => {
-    void restore().finally(() => setIsLoading(false))
-  }, [restore])
+    let active = true
+
+    async function restoreSession() {
+      try {
+        const token = await getToken()
+        if (!token) {
+          if (active) {
+            setUser(null)
+            setIsLoading(false)
+          }
+          return
+        }
+
+        const me = await trackerApi.me()
+        if (active) {
+          setUser(me)
+          setIsLoading(false)
+        }
+      } catch {
+        await clearToken()
+        if (active) {
+          setUser(null)
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void restoreSession()
+
+    const unsubscribe = trackerApi.onSessionExpired(() => {
+      if (active) {
+        setUser(null)
+        setError('Your session has expired. Please sign in again.')
+      }
+    })
+
+    return () => {
+      active = false
+      unsubscribe()
+    }
+  }, [])
 
   const login = useCallback(async (username: string, pin: string) => {
+    setError(null)
     const result = await trackerApi.login(username.trim(), pin)
     await setToken(result.token)
     setUser(result.user)
@@ -39,18 +75,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await clearToken()
     setUser(null)
+    setError(null)
   }, [])
 
-  const value = useMemo(
-    () => ({ user, isLoading, isAuthenticated: user !== null, login, logout }),
-    [user, isLoading, login, logout]
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: user !== null,
+      error,
+      login,
+      logout,
+      clearError,
+    }),
+    [user, isLoading, error, login, logout, clearError]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used inside AuthProvider')
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
   return context
 }
