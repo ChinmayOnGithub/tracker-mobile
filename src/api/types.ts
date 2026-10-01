@@ -59,3 +59,29 @@ export type ApiFailure = {
 }
 
 export type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure
+
+export interface WorkSession {
+  id: string
+  userId: string
+  date: string
+  mode: 'office' | 'wfh'
+  status: 'ACTIVE' | 'PAUSED' | 'COMPLETED'
+  startedAt: string | null
+  endedAt: string | null
+  durationMinutes: number
+  durationSeconds?: number
+  loggingMode: 'timer' | 'manual'
+  manualMinutes?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface WeightRecord {
+  id: string
+  userId: string
+  date: string
+  weight: number
+  notes?: string | null
+  createdAt?: string
+  updatedAt?: string
+}

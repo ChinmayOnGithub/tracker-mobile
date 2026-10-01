@@ -6,6 +6,8 @@ import type {
   ApiEnvelope,
   CreateLogInput,
   MobileUser,
+  WeightRecord,
+  WorkSession,
 } from './types'
 
 export const TOKEN_KEY = 'tracker.session.token'
@@ -245,6 +247,74 @@ export const trackerApi = {
         body: JSON.stringify(input),
         retries: 0,
       }
+    )
+  },
+
+  async getWorkSession(date?: string) {
+    const q = date ? `?date=${encodeURIComponent(date)}` : ''
+    return performFetch<{ activeSession: WorkSession | null; sessionForDate: WorkSession | null }>(
+      `/api/mobile/v1/work/session${q}`
+    )
+  },
+
+  async startWorkSession(date: string, mode: 'office' | 'wfh' = 'office', inTime?: string) {
+    return performFetch<{ session: WorkSession }>('/api/mobile/v1/work/session', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'start', date, mode, inTime }),
+      retries: 0,
+    })
+  },
+
+  async pauseWorkSession(id: string) {
+    return performFetch<{ session: WorkSession }>('/api/mobile/v1/work/session', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, action: 'pause' }),
+      retries: 0,
+    })
+  },
+
+  async resumeWorkSession(id: string) {
+    return performFetch<{ session: WorkSession }>('/api/mobile/v1/work/session', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, action: 'resume' }),
+      retries: 0,
+    })
+  },
+
+  async finishWorkSession(id: string) {
+    return performFetch<{ session: WorkSession }>('/api/mobile/v1/work/session', {
+      method: 'PATCH',
+      body: JSON.stringify({ id, action: 'finish' }),
+      retries: 0,
+    })
+  },
+
+  async logManualWorkSession(date: string, mode: 'office' | 'wfh', durationMinutes: number) {
+    return performFetch<{ session: WorkSession }>('/api/mobile/v1/work/session', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'manual', date, mode, durationMinutes }),
+      retries: 0,
+    })
+  },
+
+  async getWeightHistory(days = 30) {
+    return performFetch<{ records: WeightRecord[] }>(
+      `/api/mobile/v1/weight?days=${days}`
+    )
+  },
+
+  async logWeight(date: string, weight: number, notes?: string, consentToCreateActivity = true) {
+    return performFetch<{ record: WeightRecord }>('/api/mobile/v1/weight', {
+      method: 'POST',
+      body: JSON.stringify({ date, weight, notes, consentToCreateActivity }),
+      retries: 0,
+    })
+  },
+
+  async deleteWeight(id: string) {
+    return performFetch<{ deleted: boolean }>(
+      `/api/mobile/v1/weight?id=${encodeURIComponent(id)}`,
+      { method: 'DELETE', retries: 0 }
     )
   },
 }

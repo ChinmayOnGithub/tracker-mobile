@@ -13,14 +13,18 @@ import { ErrorView } from '@/components/ErrorView'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { StatusBadge } from '@/components/StatusBadge'
+import { TrackerIcon } from '@/components/TrackerIcon'
 import { cacheLogs, cacheTemplates, getCachedLogs, getCachedTemplates } from '@/db/database'
-import { colors, spacing, typography } from '@/theme/tokens'
-import { formatDisplayDate, todayYmd } from '@/utils/date'
+import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { getNextActivityStatus } from '@/domain/activity'
+import { WorkSessionCard } from './WorkSessionCard'
+import { WeightWidgetCard } from './WeightWidgetCard'
 
 export function TodayScreen() {
   const db = useSQLiteContext()
-  const currentDate = todayYmd()
+  const today = todayYmd()
+  const [selectedDate, setSelectedDate] = useState(today)
   const [templates, setTemplates] = useState<ActivityTemplate[]>([])
   const [logs, setLogs] = useState<ActivityLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,7 +40,7 @@ export function TodayScreen() {
     try {
       const [templateResult, logResult] = await Promise.all([
         trackerApi.getTemplates(),
-        trackerApi.getLogs(currentDate),
+        trackerApi.getLogs(selectedDate),
       ])
 
       setTemplates(templateResult.templates)
@@ -49,7 +53,7 @@ export function TodayScreen() {
       // Fallback to SQLite cache on network failure
       try {
         const cachedT = await getCachedTemplates(db)
-        const cachedL = await getCachedLogs(db, currentDate)
+        const cachedL = await getCachedLogs(db, selectedDate)
         if (cachedT.length > 0) {
           setTemplates(cachedT)
           setLogs(cachedL)
@@ -64,7 +68,7 @@ export function TodayScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [currentDate, db])
+  }, [selectedDate, db])
 
   useFocusEffect(
     useCallback(() => {
@@ -88,7 +92,7 @@ export function TodayScreen() {
       } else {
         const result = await trackerApi.createLog({
           activityId: template.id,
-          date: currentDate,
+          date: selectedDate,
           status: newStatus,
         })
         setLogs((prev) => [...prev, result.log])
@@ -100,31 +104,98 @@ export function TodayScreen() {
     }
   }
 
+  const logMap = new Map(logs.map((l) => [l.activityId, l]))
+  const completedCount = templates.filter(
+    (t) => logMap.get(t.id)?.status === 'done'
+  ).length
+  const totalCount = templates.length
+  const percentComplete =
+    totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+
   if (loading && !refreshing) {
     return (
       <Screen>
-        <LoadingState message="Loading today's activities..." />
+        <LoadingState message="Loading activities..." />
       </Screen>
     )
   }
 
-  const logMap = new Map(logs.map((l) => [l.activityId, l]))
+  const isToday = selectedDate === today
 
   return (
     <Screen onRefresh={() => void load(true)} refreshing={refreshing}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Today</Text>
-        <Text style={styles.date}>{formatDisplayDate(currentDate)}</Text>
+      {/* Date Switcher Bar */}
+      <View style={styles.dateBar}>
+        <Pressable
+          accessibilityLabel="Previous day"
+          hitSlop={8}
+          onPress={() => setSelectedDate((d) => addDays(d, -1))}
+          style={styles.dateNavBtn}
+        >
+          <TrackerIcon name="chevron-left" size="sm" color={colors.textMuted} />
+        </Pressable>
+
+        <View style={styles.dateCenter}>
+          <Text style={styles.dateText}>{formatDisplayDate(selectedDate)}</Text>
+          {!isToday ? (
+            <Pressable
+              accessibilityLabel="Jump to today"
+              onPress={() => setSelectedDate(today)}
+            >
+              <Text style={styles.todayPill}>Today</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
+        <Pressable
+          accessibilityLabel="Next day"
+          hitSlop={8}
+          onPress={() => setSelectedDate((d) => addDays(d, 1))}
+          style={styles.dateNavBtn}
+        >
+          <TrackerIcon name="chevron-right" size="sm" color={colors.textMuted} />
+        </Pressable>
       </View>
+
+      {/* Progress Summary Card */}
+      {totalCount > 0 ? (
+        <Card style={styles.progressCard}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressTitle}>Daily Progress</Text>
+            <Text style={styles.progressStats}>
+              {completedCount} of {totalCount} completed ({percentComplete}%)
+            </Text>
+          </View>
+          <View style={styles.progressBarTrack}>
+            <View
+              style={[styles.progressBarFill, { width: `${percentComplete}%` }]}
+            />
+          </View>
+        </Card>
+      ) : null}
+
+      {/* Work Session Widget */}
+      <WorkSessionCard date={selectedDate} />
+
+      {/* Weight Tracking Widget */}
+      <WeightWidgetCard date={selectedDate} onWeightLogged={() => void load()} />
 
       {error ? (
         <ErrorView message={error} onRetry={() => void load()} />
       ) : null}
 
+      {/* Activity Checklist */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Activities</Text>
+        <Text style={styles.sectionSubtitle}>
+          Tap card or badge to cycle status
+        </Text>
+      </View>
+
       {templates.length === 0 ? (
         <EmptyState
           actionLabel="Refresh"
-          message="No active activities found for today. Add templates in web Tracker to see them here."
+          message="No active activities found for this date. Create templates in Activities tab."
           onAction={() => void load()}
           title="No activities yet"
         />
@@ -132,7 +203,7 @@ export function TodayScreen() {
         <View style={styles.list}>
           {templates.map((template) => {
             const log = logMap.get(template.id)
-            const status = log ? log.status : 'open'
+            const status = log ? log.status : 'cleared'
             const isDone = status === 'done'
             const isToggling = togglingId === template.id
 
@@ -143,18 +214,36 @@ export function TodayScreen() {
                 style={styles.card}
               >
                 <View style={styles.row}>
+                  {/* Status Indicator Icon */}
+                  <Pressable
+                    accessibilityLabel={`Toggle status for ${template.name}`}
+                    disabled={isToggling}
+                    hitSlop={8}
+                    onPress={() => void toggleActivity(template)}
+                    style={[
+                      styles.checkCircle,
+                      status === 'done' && styles.checkCircleDone,
+                      status === 'canceled' && styles.checkCircleCanceled,
+                      status === 'postponed' && styles.checkCirclePostponed,
+                    ]}
+                  >
+                    {status === 'done' ? (
+                      <TrackerIcon name="check" size="xs" color="#fff" />
+                    ) : status === 'canceled' ? (
+                      <TrackerIcon name="x" size="xs" color="#fff" />
+                    ) : status === 'postponed' ? (
+                      <TrackerIcon name="clock" size="xs" color="#fff" />
+                    ) : null}
+                  </Pressable>
+
                   <View style={styles.copy}>
                     <Text style={[styles.name, isDone && styles.doneName]}>
                       {template.name}
                     </Text>
                     <Text style={styles.category}>{template.category}</Text>
                   </View>
-                  <Pressable
-                    disabled={isToggling}
-                    onPress={() => void toggleActivity(template)}
-                  >
-                    <StatusBadge status={status} />
-                  </Pressable>
+
+                  <StatusBadge status={status} />
                 </View>
               </Card>
             )
@@ -166,19 +255,82 @@ export function TodayScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    gap: spacing.xs,
+  dateBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderColor: colors.border,
+    borderWidth: 1,
   },
-  title: {
-    color: colors.text,
-    fontSize: typography.hero.fontSize,
-    lineHeight: typography.hero.lineHeight,
-    fontWeight: '800',
+  dateNavBtn: {
+    padding: spacing.xs,
   },
-  date: {
-    color: colors.textMuted,
+  dateCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  dateText: {
     fontSize: typography.sm.fontSize,
-    lineHeight: typography.sm.lineHeight,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  todayPill: {
+    fontSize: typography.xs.fontSize,
+    fontWeight: '800',
+    color: '#ff7557',
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255, 117, 87, 0.15)',
+  },
+  progressCard: {
+    padding: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressTitle: {
+    fontSize: typography.sm.fontSize,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  progressStats: {
+    fontSize: typography.xs.fontSize,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceRaised,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#ff7557', // Canonical Tracker coral accent
+    borderRadius: radius.full,
+  },
+  sectionHeader: {
+    marginTop: spacing.sm,
+    gap: 2,
+  },
+  sectionTitle: {
+    fontSize: typography.md.fontSize,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  sectionSubtitle: {
+    fontSize: typography.xs.fontSize,
+    color: colors.textMuted,
   },
   list: {
     gap: spacing.sm,
@@ -189,17 +341,38 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.md,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+  },
+  checkCircleDone: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  checkCircleCanceled: {
+    backgroundColor: colors.danger,
+    borderColor: colors.danger,
+  },
+  checkCirclePostponed: {
+    backgroundColor: colors.warning,
+    borderColor: colors.warning,
   },
   copy: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   name: {
     color: colors.text,
-    fontSize: typography.md.fontSize,
-    lineHeight: typography.md.lineHeight,
+    fontSize: typography.base.fontSize,
+    lineHeight: typography.base.lineHeight,
     fontWeight: '700',
   },
   doneName: {

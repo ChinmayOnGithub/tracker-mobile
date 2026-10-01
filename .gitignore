@@ -3,6 +3,7 @@ node_modules/
 dist/
 web-build/
 *.log
+bun.lock
 .env
 .env.*
 !.env.example

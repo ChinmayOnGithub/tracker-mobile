@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { colors, layout, radius, spacing, typography } from '@/theme/tokens'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'ghost'
+export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'ghost' | 'outline'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps {
@@ -44,6 +44,8 @@ export function Button({
       ? styles.destructive
       : variant === 'ghost'
       ? styles.ghost
+      : variant === 'outline'
+      ? styles.outline
       : styles.primary
 
   const pressedStyle =
@@ -53,6 +55,8 @@ export function Button({
       ? styles.destructive_pressed
       : variant === 'ghost'
       ? styles.ghost_pressed
+      : variant === 'outline'
+      ? styles.outline_pressed
       : styles.primary_pressed
 
   const sizeStyle =
@@ -65,6 +69,8 @@ export function Button({
       ? styles.label_destructive
       : variant === 'ghost'
       ? styles.label_ghost
+      : variant === 'outline'
+      ? styles.label_outline
       : styles.label_primary
 
   const labelSizeStyle =
@@ -139,6 +145,15 @@ const styles = StyleSheet.create({
   ghost_pressed: {
     backgroundColor: colors.primarySubtle,
   },
+  outline: {
+    backgroundColor: 'transparent',
+    borderColor: colors.border,
+    borderWidth: 1,
+  },
+  outline_pressed: {
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.textMuted,
+  },
   size_sm: {
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
@@ -162,6 +177,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   label_secondary: {
+    color: colors.text,
+  },
+  label_outline: {
     color: colors.text,
   },
   label_destructive: {
