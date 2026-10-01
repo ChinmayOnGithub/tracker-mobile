@@ -3,5 +3,15 @@ const { defineConfig } = require('eslint/config')
 
 module.exports = defineConfig([
   expoConfig,
-  { ignores: ['.expo/**', 'node_modules/**'] },
+  {
+    ignores: [
+      '.expo/**',
+      'node_modules/**',
+      '.template-source/**',
+      '.agents/**',
+      'dist/**',
+      'web-build/**',
+      'assets/**',
+    ],
+  },
 ])
