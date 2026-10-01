@@ -6,8 +6,17 @@ describe('Design Tokens', () => {
     expect(colors.background).toMatch(/^#[0-9a-f]{6}$/i)
     expect(colors.surface).toMatch(/^#[0-9a-f]{6}$/i)
     expect(colors.primary).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(colors.coral).toMatch(/^#[0-9a-f]{6}$/i)
     expect(colors.danger).toMatch(/^#[0-9a-f]{6}$/i)
     expect(colors.success).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(colors.coral).toBe('#ff7557')
+  })
+
+  it('provides a controlled paletteColors array with brand tokens', () => {
+    expect(colors.coral).toBe('#ff7557')
+    expect(colors.emerald).toBe('#10b981')
+    expect(colors.sky).toBe('#38bdf8')
+    expect(colors.purple).toBe('#8b5cf6')
   })
 
   it('guarantees touch target compliance of at least 48px', () => {

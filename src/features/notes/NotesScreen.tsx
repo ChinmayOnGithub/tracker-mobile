@@ -215,12 +215,14 @@ export function NotesScreen() {
                     </Text>
                   ) : null}
                   <Text style={styles.noteDate}>
-                    {new Date(note.updatedAt || Date.now()).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {note.updatedAt || note.createdAt
+                      ? new Date(note.updatedAt || note.createdAt!).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : ''}
                   </Text>
                 </Card>
               </TouchableOpacity>

@@ -33,8 +33,23 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
   }, [])
 
   useEffect(() => {
-    void loadWeight()
-  }, [loadWeight])
+    let mounted = true
+    trackerApi.getWeightHistory(7)
+      .then((res) => {
+        if (mounted) {
+          setRecords(res.records || [])
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const latestRecord = records[records.length - 1] || null
 

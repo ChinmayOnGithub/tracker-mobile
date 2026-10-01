@@ -7,6 +7,14 @@ export const colors = {
   text: '#f8fafc',
   textMuted: '#94a3b8',
   textSubtle: '#64748b',
+  white: '#ffffff',
+
+  // Canonical Tracker Brand
+  coral: '#ff7557',
+  coralSubtle: 'rgba(255, 117, 87, 0.15)',
+  coralHover: '#f9a68e',
+
+  // Core Accents
   primary: '#6366f1',
   primaryHover: '#4f46e5',
   primarySubtle: 'rgba(99, 102, 241, 0.15)',
@@ -16,7 +24,24 @@ export const colors = {
   warningSubtle: 'rgba(245, 158, 11, 0.15)',
   danger: '#ef4444',
   dangerSubtle: 'rgba(239, 68, 68, 0.15)',
+
+  // Preset Palette for Habits & Badges
+  emerald: '#10b981',
+  sky: '#38bdf8',
+  purple: '#8b5cf6',
+  amber: '#f59e0b',
+  rose: '#ec4899',
 } as const
+
+export const paletteColors = [
+  colors.coral,
+  colors.emerald,
+  colors.primary,
+  colors.purple,
+  colors.warning,
+  colors.sky,
+  colors.rose,
+] as const
 
 export const spacing = {
   xs: 4,

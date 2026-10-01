@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#ff7557', // Canonical Tracker brand coral
+    backgroundColor: colors.coral, // Canonical Tracker brand coral
     position: 'relative',
     overflow: 'hidden',
   },
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#f9a68e',
+    backgroundColor: colors.coralHover,
   },
   logoCutout: {
     position: 'absolute',
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     marginBottom: -1,
   },
   tabActive: {
-    borderBottomColor: '#ff7557',
+    borderBottomColor: colors.coral,
   },
   tabText: {
     fontSize: typography.sm.fontSize,
@@ -275,6 +275,6 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: spacing.xs,
-    backgroundColor: '#ff7557',
+    backgroundColor: colors.coral,
   },
 })

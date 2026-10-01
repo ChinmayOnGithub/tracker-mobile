@@ -228,11 +228,11 @@ export function TodayScreen() {
                     ]}
                   >
                     {status === 'done' ? (
-                      <TrackerIcon name="check" size="xs" color="#fff" />
+                      <TrackerIcon name="check" size="xs" color={colors.white} />
                     ) : status === 'canceled' ? (
-                      <TrackerIcon name="x" size="xs" color="#fff" />
+                      <TrackerIcon name="x" size="xs" color={colors.white} />
                     ) : status === 'postponed' ? (
-                      <TrackerIcon name="clock" size="xs" color="#fff" />
+                      <TrackerIcon name="clock" size="xs" color={colors.white} />
                     ) : null}
                   </Pressable>
 
@@ -282,11 +282,11 @@ const styles = StyleSheet.create({
   todayPill: {
     fontSize: typography.xs.fontSize,
     fontWeight: '800',
-    color: '#ff7557',
+    color: colors.coral,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 2,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255, 117, 87, 0.15)',
+    backgroundColor: colors.coralSubtle,
   },
   progressCard: {
     padding: spacing.md,
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#ff7557', // Canonical Tracker coral accent
+    backgroundColor: colors.coral,
     borderRadius: radius.full,
   },
   sectionHeader: {

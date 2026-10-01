@@ -1,11 +1,11 @@
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { colors, spacing, typography } from '@/theme/tokens'
 
 export function SettingsScreen() {
   const { user, logout } = useAuth()
@@ -43,7 +43,7 @@ export function SettingsScreen() {
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
             <View style={styles.binIconWrap}>
-              <TrackerIcon name="trash" size="sm" color="#ff7557" />
+              <TrackerIcon name="trash" size="sm" color={colors.coral} />
             </View>
             <View style={styles.binCopyWrap}>
               <Text style={styles.cardHeading}>Bin / Recovery</Text>
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#ff755722',
+    backgroundColor: colors.coralSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },

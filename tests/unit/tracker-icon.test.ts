@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from 'bun:test'
+import type { TrackerIconName } from '@/components/TrackerIcon'
 
 mock.module('react-native', () => ({
   Platform: { OS: 'android' },
@@ -20,7 +21,6 @@ mock.module('react-native-svg', () => {
 })
 
 const { TrackerIcon } = await import('@/components/TrackerIcon')
-import type { TrackerIconName } from '@/components/TrackerIcon'
 
 describe('TrackerIcon Semantic Registry', () => {
   const semanticNames: TrackerIconName[] = [

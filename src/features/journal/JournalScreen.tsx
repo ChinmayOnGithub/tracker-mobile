@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   Alert,
   KeyboardAvoidingView,
@@ -21,11 +21,11 @@ import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 
 const MOODS = [
-  { label: 'Great', value: 'great', color: '#10b981', emoji: '😄' },
-  { label: 'Good', value: 'good', color: '#38bdf8', emoji: '🙂' },
-  { label: 'Okay', value: 'okay', color: '#8b5cf6', emoji: '😐' },
-  { label: 'Low', value: 'low', color: '#f59e0b', emoji: '😔' },
-  { label: 'Tough', value: 'tough', color: '#ef4444', emoji: '😫' },
+  { label: 'Great', value: 'great', color: colors.emerald, emoji: '😄' },
+  { label: 'Good', value: 'good', color: colors.sky, emoji: '🙂' },
+  { label: 'Okay', value: 'okay', color: colors.purple, emoji: '😐' },
+  { label: 'Low', value: 'low', color: colors.amber, emoji: '😔' },
+  { label: 'Tough', value: 'tough', color: colors.danger, emoji: '😫' },
 ]
 
 type SectionTab = 'entry' | 'gratitude' | 'plan'
@@ -259,7 +259,7 @@ export function JournalScreen() {
                     activeTab === 'plan' && styles.sectionTabTextActive,
                   ]}
                 >
-                  Tomorrow's Plan
+                  {"Tomorrow's Plan"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -392,13 +392,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   todayBadge: {
-    backgroundColor: '#ff755722',
+    backgroundColor: colors.coralSubtle,
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 4,
   },
   todayBadgeText: {
-    color: '#ff7557',
+    color: colors.coral,
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   jumpTodayText: {
-    color: '#ff7557',
+    color: colors.coral,
     fontSize: 10,
     fontWeight: '600',
   },
@@ -463,8 +463,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sectionTabActive: {
-    backgroundColor: '#ff7557',
-    borderColor: '#ff7557',
+    backgroundColor: colors.coral,
+    borderColor: colors.coral,
   },
   sectionTabText: {
     color: colors.textMuted,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   sectionTabTextActive: {
-    color: '#ffffff',
+    color: colors.white,
     fontWeight: '700',
   },
   editorCard: {

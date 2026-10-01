@@ -137,9 +137,11 @@ export interface NoteItem {
   updatedAt?: string
 }
 
+export type BinEntityType = 'journal' | 'note' | 'activity_template' | 'weight'
+
 export interface BinItem {
   id: string
-  entityType: 'journal' | 'note' | 'activity_template' | 'weight'
+  entityType: BinEntityType
   title: string
   preview?: string | null
   deletedAt: string

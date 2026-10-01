@@ -4,6 +4,7 @@ import type {
   ActivityLog,
   ActivityTemplate,
   ApiEnvelope,
+  BinEntityType,
   BinItem,
   CreateLogInput,
   CreateTemplateInput,
@@ -400,7 +401,7 @@ export const trackerApi = {
     return performFetch<{ items: BinItem[] }>('/api/mobile/v1/bin')
   },
 
-  async restoreBinItem(entityType: string, id: string) {
+  async restoreBinItem(entityType: BinEntityType, id: string) {
     return performFetch<{ restored: boolean }>('/api/mobile/v1/bin', {
       method: 'POST',
       body: JSON.stringify({ entityType, id, action: 'restore' }),

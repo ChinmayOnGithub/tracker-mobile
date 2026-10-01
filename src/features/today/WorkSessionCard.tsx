@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { StyleSheet, Text, View, Pressable } from 'react-native'
+import { useEffect, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
 import { TrackerIcon } from '@/components/TrackerIcon'
@@ -16,46 +16,50 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
   const [actionLoading, setActionLoading] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
-  const loadSession = useCallback(async () => {
-    try {
-      const res = await trackerApi.getWorkSession(date)
-      const current = res.activeSession || res.sessionForDate || null
-      setSession(current)
-    } catch {
-      // Offline fallback: keep previous session
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    let mounted = true
+    trackerApi.getWorkSession(date)
+      .then((res) => {
+        if (mounted) {
+          const current = res.activeSession || res.sessionForDate || null
+          setSession(current)
+          setLoading(false)
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setLoading(false)
+        }
+      })
+    return () => {
+      mounted = false
     }
   }, [date])
-
-  useEffect(() => {
-    void loadSession()
-  }, [loadSession])
 
   // Timer interval for active session
   useEffect(() => {
     if (!session || session.status !== 'ACTIVE' || !session.startedAt) {
-      if (session?.durationMinutes) {
-        setElapsedSeconds(session.durationMinutes * 60)
-      } else {
-        setElapsedSeconds(0)
-      }
       return
     }
 
+    const started = new Date(session.startedAt).getTime()
     const computeElapsed = () => {
-      const started = new Date(session.startedAt!).getTime()
-      const now = Date.now()
-      const segSeconds = Math.max(0, Math.floor((now - started) / 1000))
+      const segSeconds = Math.max(0, Math.floor((Date.now() - started) / 1000))
       return (session.durationMinutes || 0) * 60 + segSeconds
     }
 
-    setElapsedSeconds(computeElapsed())
+    const timerId = setTimeout(() => {
+      setElapsedSeconds(computeElapsed())
+    }, 0)
+
     const interval = setInterval(() => {
       setElapsedSeconds(computeElapsed())
     }, 1000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(timerId)
+      clearInterval(interval)
+    }
   }, [session])
 
   const formatTimer = (totalSeconds: number) => {
@@ -125,6 +129,10 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
   const isPaused = session?.status === 'PAUSED'
   const isCompleted = session?.status === 'COMPLETED'
 
+  const displaySeconds = isRunning
+    ? elapsedSeconds
+    : (session?.durationMinutes || 0) * 60
+
   return (
     <Card style={styles.card}>
       <View style={styles.headerRow}>
@@ -153,7 +161,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
         <Text style={[styles.timerDigits, isRunning && styles.timerDigitsActive]}>
           {isCompleted
             ? `${Math.floor((session?.durationMinutes || 0) / 60)}h ${(session?.durationMinutes || 0) % 60}m`
-            : formatTimer(elapsedSeconds)}
+            : formatTimer(displaySeconds)}
         </Text>
         <Text style={styles.timerLabel}>
           {isCompleted
@@ -228,7 +236,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
         ) : (
           <View style={styles.completedRow}>
             <TrackerIcon name="check" size="sm" color={colors.success} />
-            <Text style={styles.completedText}>Day's work session finalized</Text>
+            <Text style={styles.completedText}>{"Day's work session finalized"}</Text>
           </View>
         )}
       </View>
@@ -293,7 +301,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   timerDigitsActive: {
-    color: '#ff7557', // Canonical Tracker coral accent
+    color: colors.coral,
   },
   timerLabel: {
     fontSize: typography.xs.fontSize,

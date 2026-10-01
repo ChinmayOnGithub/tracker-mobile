@@ -1,4 +1,5 @@
 import React from 'react'
+import type { ColorValue } from 'react-native'
 import {
   Activity,
   ArrowUpDown,
@@ -127,8 +128,6 @@ const SIZE_MAP: Record<Exclude<TrackerIconSize, number>, number> = {
   lg: 26,
   xl: 32,
 }
-
-import type { ColorValue } from 'react-native'
 
 export interface TrackerIconProps {
   name: TrackerIconName

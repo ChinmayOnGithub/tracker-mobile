@@ -101,7 +101,7 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'ghost' ? colors.primary : '#ffffff'}
+          color={variant === 'ghost' ? colors.primary : colors.white}
           size="small"
         />
       ) : (
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   label_primary: {
-    color: '#ffffff',
+    color: colors.white,
   },
   label_secondary: {
     color: colors.text,
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   label_destructive: {
-    color: '#ffffff',
+    color: colors.white,
   },
   label_ghost: {
     color: colors.primary,

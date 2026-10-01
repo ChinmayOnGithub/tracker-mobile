@@ -38,13 +38,13 @@ function getEntityIcon(type: BinItem['entityType']): TrackerIconName {
 function getEntityColor(type: BinItem['entityType']): string {
   switch (type) {
     case 'journal':
-      return '#ff7557'
+      return colors.coral
     case 'note':
-      return '#38bdf8'
+      return colors.sky
     case 'activity_template':
-      return '#10b981'
+      return colors.emerald
     case 'weight':
-      return '#8b5cf6'
+      return colors.purple
     default:
       return colors.textMuted
   }
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   filterChipActive: {
-    backgroundColor: '#ff7557',
-    borderColor: '#ff7557',
+    backgroundColor: colors.coral,
+    borderColor: colors.coral,
   },
   filterChipText: {
     color: colors.textMuted,
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: '#ffffff',
+    color: colors.white,
   },
   list: {
     gap: spacing.sm,
