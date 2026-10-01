@@ -13,14 +13,14 @@ export interface EntitlementLimits {
 }
 
 export const FREE_TIER_LIMITS: EntitlementLimits = {
-  maxActiveActivities: 20,
+  maxActiveActivities: 10, // Aligned with server canonical FREE_ENTITLEMENTS (10)
   maxVaultStorageBytes: 50 * 1024 * 1024, // 50 MB
   allowDataExport: true,
   allowMultiDeviceSync: true,
 } as const
 
 export const PRO_TIER_LIMITS: EntitlementLimits = {
-  maxActiveActivities: 500,
+  maxActiveActivities: 10000, // Aligned with server canonical PRO_ENTITLEMENTS (10000)
   maxVaultStorageBytes: 5 * 1024 * 1024 * 1024, // 5 GB
   allowDataExport: true,
   allowMultiDeviceSync: true,

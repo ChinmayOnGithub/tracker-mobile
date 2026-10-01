@@ -50,6 +50,35 @@ export const MIGRATIONS: Migration[] = [
       `)
     },
   },
+  {
+    version: 2,
+    name: 'mutation_queue_and_versioning',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        ALTER TABLE activity_template ADD COLUMN deleted_at TEXT;
+        ALTER TABLE activity_template ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+
+        ALTER TABLE activity_log ADD COLUMN deleted_at TEXT;
+        ALTER TABLE activity_log ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+
+        CREATE TABLE IF NOT EXISTS mutation_queue (
+          id TEXT PRIMARY KEY NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          operation TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          version INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_mutation_queue_created
+          ON mutation_queue(created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_mutation_queue_entity
+          ON mutation_queue(entity_type, entity_id);
+      `)
+    },
+  },
 ]
 
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {

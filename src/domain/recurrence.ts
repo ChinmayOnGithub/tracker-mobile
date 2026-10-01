@@ -131,7 +131,7 @@ export function analyzeRecurrence(
   }
 
   const completionLogs = logs
-    .filter((log) => log.status === 'done')
+    .filter((log) => log.status !== 'skipped' && log.status !== 'postponed' && log.status !== 'reminder' && log.status !== 'canceled')
     .sort((a, b) => b.date.localeCompare(a.date))
 
   const lastCompletedDate = completionLogs.length > 0 ? completionLogs[0].date : null
