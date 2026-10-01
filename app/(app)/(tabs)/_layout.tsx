@@ -33,6 +33,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="calendar"
+        options={{
+          title: 'Calendar',
+          tabBarAccessibilityLabel: 'Calendar tab',
+          tabBarIcon: ({ color }) => (
+            <TrackerIcon name="calendar" size="sm" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="activities"
         options={{
           title: 'Activities',

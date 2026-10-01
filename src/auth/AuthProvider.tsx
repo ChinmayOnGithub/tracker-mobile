@@ -79,6 +79,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setUser(result.user)
   }, [])
 
+  const handleGoogleSession = useCallback(async (token: string) => {
+    setError(null)
+    await setToken(token)
+    const me = await trackerApi.me()
+    setUser(me)
+  }, [])
+
   const logout = useCallback(async () => {
     await clearToken()
     setUser(null)
@@ -93,10 +100,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       error,
       login,
       register,
+      handleGoogleSession,
       logout,
       clearError,
     }),
-    [user, isLoading, error, login, register, logout, clearError]
+    [user, isLoading, error, login, register, handleGoogleSession, logout, clearError]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

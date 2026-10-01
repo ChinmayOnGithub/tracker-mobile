@@ -10,6 +10,7 @@ export interface AuthState {
 export interface AuthContextValue extends AuthState {
   login: (username: string, secret: string) => Promise<void>
   register: (username: string, password: string) => Promise<void>
+  handleGoogleSession: (token: string) => Promise<void>
   logout: () => Promise<void>
   clearError: () => void
 }

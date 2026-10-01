@@ -146,3 +146,116 @@ export interface BinItem {
   preview?: string | null
   deletedAt: string
 }
+
+export type OnboardingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
+
+export interface OnboardingState {
+  version: 1
+  status: OnboardingStatus
+  currentStep: number
+  completedSteps: number[]
+  taskSources: string[]
+  calendarProvider: string | null
+  workStartTime: string
+  workEndTime: string
+  planningStyle: string | null
+  dailyCapacity: number
+  focusAreas: string[]
+  firstDayObjective: string
+  timezone: string
+  firstPlanActivityId: string | null
+  momentum: number
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface CalendarMonthSummaryDTO {
+  date: string // "YYYY-MM-DD"
+  taskCount: number
+  eventCount: number
+  workedHours: number
+  highestPriorityTask: {
+    id: string
+    title: string
+    priority: 'LOW' | 'MEDIUM' | 'NORMAL' | 'HIGH' | 'CRITICAL'
+    color: string
+  } | null
+  hasJournal: boolean
+  hasWeight: boolean
+  hasLeave: boolean
+  statusColor: string
+}
+
+export interface CalendarWeekEventDTO {
+  id: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  color: string | null
+  type: string
+  trackerArtifactId: string | null
+  trackerArtifactType: string | null
+  status?: string
+}
+
+export interface CalendarWeekDayDTO {
+  date: string
+  events: CalendarWeekEventDTO[]
+  workedHours: number
+  isLeave: boolean
+}
+
+export interface CalendarWeekDTO {
+  days: CalendarWeekDayDTO[]
+}
+
+export interface CalendarDayEventDTO {
+  id: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  color: string | null
+  type: string
+  trackerArtifactId: string | null
+  trackerArtifactType: string | null
+  status: string
+  description: string | null
+}
+
+export interface CalendarDayDTO {
+  date: string
+  events: CalendarDayEventDTO[]
+  tasks: {
+    id: string
+    title: string
+    status: string
+    priority: string
+    color: string
+  }[]
+  workedHours: number
+  workStatus: 'office' | 'wfh' | 'cleared'
+  workDetails: {
+    inTime?: string
+    outTime?: string
+    hours?: number
+  } | null
+  journalEntry: {
+    id: string
+    title: string | null
+    content: string
+  } | null
+  weight: number | null
+  habits: {
+    id: string
+    name: string
+    completed: boolean
+    streak: number
+  }[]
+  isLeave: boolean
+  leaveDetails: {
+    type: string
+    status: string
+  } | null
+}

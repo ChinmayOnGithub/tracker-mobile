@@ -6,11 +6,15 @@ import type {
   ApiEnvelope,
   BinEntityType,
   BinItem,
+  CalendarDayDTO,
+  CalendarMonthSummaryDTO,
+  CalendarWeekDTO,
   CreateLogInput,
   CreateTemplateInput,
   JournalEntry,
   MobileUser,
   NoteItem,
+  OnboardingState,
   UpdateTemplateInput,
   WeightRecord,
   WorkSession,
@@ -249,8 +253,18 @@ export const trackerApi = {
     return performFetch<{ log: ActivityLog }>(
       `/api/mobile/v1/activities/logs/${encodeURIComponent(id)}`,
       {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify(input),
+        retries: 0,
+      }
+    )
+  },
+
+  async deleteLog(id: string) {
+    return performFetch<{ deleted: boolean; id: string }>(
+      `/api/mobile/v1/activities/logs/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
         retries: 0,
       }
     )
@@ -407,6 +421,64 @@ export const trackerApi = {
       body: JSON.stringify({ entityType, id, action: 'restore' }),
       retries: 0,
     })
+  },
+
+  async getOnboardingState() {
+    return performFetch<{ state: OnboardingState | null }>('/api/mobile/v1/onboarding')
+  },
+
+  async saveOnboardingState(state: OnboardingState) {
+    return performFetch<{ state: OnboardingState }>('/api/mobile/v1/onboarding', {
+      method: 'POST',
+      body: JSON.stringify(state),
+      retries: 0,
+    })
+  },
+
+  async completeOnboarding(state: OnboardingState) {
+    return performFetch<{
+      state: OnboardingState
+      plan: {
+        created: boolean
+        activityIds: string[]
+        activities: { id: string; name: string; scheduledTime: string | null; estimatedDuration: number; category: string }[]
+      }
+    }>('/api/mobile/v1/onboarding/complete', {
+      method: 'POST',
+      body: JSON.stringify(state),
+      retries: 0,
+    })
+  },
+
+  async getCalendarMonth(month?: string, timezone?: string) {
+    const params = new URLSearchParams()
+    if (month) params.set('month', month)
+    if (timezone) params.set('timezone', timezone)
+    const q = params.toString() ? `?${params.toString()}` : ''
+    return performFetch<{ summaries: CalendarMonthSummaryDTO[]; year: number; month: number }>(
+      `/api/mobile/v1/calendar/month${q}`
+    )
+  },
+
+  async getCalendarWeek(startDate: string, timezone?: string) {
+    const params = new URLSearchParams({ startDate })
+    if (timezone) params.set('timezone', timezone)
+    return performFetch<{ week: CalendarWeekDTO }>(
+      `/api/mobile/v1/calendar/week?${params.toString()}`
+    )
+  },
+
+  async getCalendarDay(date: string) {
+    return performFetch<{ day: CalendarDayDTO }>(
+      `/api/mobile/v1/calendar/day?date=${encodeURIComponent(date)}`
+    )
+  },
+
+  async syncCalendar() {
+    return performFetch<{ synced: boolean; result: unknown }>(
+      '/api/mobile/v1/calendar/sync',
+      { method: 'POST', retries: 0 }
+    )
   },
 }
 export * from './types'
