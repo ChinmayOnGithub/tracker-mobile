@@ -1,0 +1,35 @@
+appId: com.chinmaypatil.tracker
+---
+- launchApp:
+    clearState: true
+
+# 1. Verify Login Screen
+- assertVisible: "TRACKER"
+- assertVisible: "Sign in"
+
+# 2. Enter Credentials and Login
+- tapOn: "Enter username"
+- inputText: "chinmay"
+- tapOn: "4-digit PIN"
+- inputText: "1234"
+- tapOn: "Sign in"
+
+# 3. Verify Today Screen
+- assertVisible: "Today"
+
+# 4. Navigate to Activities Tab
+- tapOn: "Activities tab"
+- assertVisible: "Activities"
+
+# 5. Navigate to Settings Tab
+- tapOn: "Settings tab"
+- assertVisible: "Settings"
+- assertVisible: "Account"
+
+# 6. Sign out
+- tapOn: "Sign out"
+- tapOn: "Sign out" # Confirm alert dialog
+
+# 7. Verify Back on Login Screen
+- assertVisible: "TRACKER"
+- assertVisible: "Sign in"

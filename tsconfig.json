@@ -18,7 +18,6 @@
     "expo-env.d.ts"
   ],
   "exclude": [
-    "node_modules",
-    ".template-source"
+    "node_modules"
   ]
 }

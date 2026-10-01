@@ -13,6 +13,3 @@ web-build/
 *.key
 android/
 ios/
-
-.template-source/
-
