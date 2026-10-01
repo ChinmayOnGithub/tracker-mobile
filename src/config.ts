@@ -1,4 +1,6 @@
-const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim()
+const apiUrl =
+  process.env.EXPO_PUBLIC_API_URL?.trim() ||
+  (process.env.NODE_ENV === 'test' ? 'http://localhost:3000' : undefined)
 
 if (!apiUrl) {
   throw new Error(
