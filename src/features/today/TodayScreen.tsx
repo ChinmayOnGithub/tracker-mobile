@@ -16,6 +16,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { cacheLogs, cacheTemplates, getCachedLogs, getCachedTemplates } from '@/db/database'
 import { colors, spacing, typography } from '@/theme/tokens'
 import { formatDisplayDate, todayYmd } from '@/utils/date'
+import { getNextActivityStatus } from '@/domain/activity'
 
 export function TodayScreen() {
   const db = useSQLiteContext()
@@ -73,8 +74,7 @@ export function TodayScreen() {
 
   const toggleActivity = async (template: ActivityTemplate) => {
     const existingLog = logs.find((l) => l.activityId === template.id)
-    const isDone = existingLog?.status === 'done'
-    const newStatus = isDone ? 'cleared' : 'done'
+    const newStatus = getNextActivityStatus(existingLog?.status ?? 'cleared', template.recurrenceType)
 
     setTogglingId(template.id)
     try {
