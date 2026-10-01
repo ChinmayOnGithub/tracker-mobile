@@ -4,8 +4,13 @@ import type {
   ActivityLog,
   ActivityTemplate,
   ApiEnvelope,
+  BinItem,
   CreateLogInput,
+  CreateTemplateInput,
+  JournalEntry,
   MobileUser,
+  NoteItem,
+  UpdateTemplateInput,
   WeightRecord,
   WorkSession,
 } from './types'
@@ -311,11 +316,96 @@ export const trackerApi = {
     })
   },
 
-  async deleteWeight(id: string) {
+  async createTemplate(input: CreateTemplateInput) {
+    return performFetch<{ template: ActivityTemplate }>('/api/mobile/v1/activities/templates', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      retries: 0,
+    })
+  },
+
+  async updateTemplate(id: string, input: UpdateTemplateInput) {
+    return performFetch<{ template: ActivityTemplate }>(
+      `/api/mobile/v1/activities/templates/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+        retries: 0,
+      }
+    )
+  },
+
+  async deleteTemplate(id: string) {
     return performFetch<{ deleted: boolean }>(
-      `/api/mobile/v1/weight?id=${encodeURIComponent(id)}`,
+      `/api/mobile/v1/activities/templates/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+        retries: 0,
+      }
+    )
+  },
+
+  async getJournalEntry(date: string) {
+    return performFetch<{ entry: JournalEntry | null }>(
+      `/api/mobile/v1/journal?date=${encodeURIComponent(date)}`
+    )
+  },
+
+  async upsertJournalEntry(date: string, fields: Partial<JournalEntry>) {
+    return performFetch<{ entry: JournalEntry }>('/api/mobile/v1/journal', {
+      method: 'POST',
+      body: JSON.stringify({ date, ...fields }),
+      retries: 0,
+    })
+  },
+
+  async deleteJournalEntry(id: string) {
+    return performFetch<{ success: boolean }>(
+      `/api/mobile/v1/journal?id=${encodeURIComponent(id)}`,
       { method: 'DELETE', retries: 0 }
     )
+  },
+
+  async getNotes() {
+    return performFetch<{ notes: NoteItem[] }>('/api/mobile/v1/notes')
+  },
+
+  async createNote(content: string, title?: string | null, date?: string) {
+    return performFetch<{ note: NoteItem }>('/api/mobile/v1/notes', {
+      method: 'POST',
+      body: JSON.stringify({ content, title, date }),
+      retries: 0,
+    })
+  },
+
+  async updateNote(id: string, content: string, title?: string | null) {
+    return performFetch<{ note: NoteItem }>(
+      `/api/mobile/v1/notes?id=${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ content, title }),
+        retries: 0,
+      }
+    )
+  },
+
+  async deleteNote(id: string) {
+    return performFetch<{ success: boolean }>(
+      `/api/mobile/v1/notes?id=${encodeURIComponent(id)}`,
+      { method: 'DELETE', retries: 0 }
+    )
+  },
+
+  async getBinItems() {
+    return performFetch<{ items: BinItem[] }>('/api/mobile/v1/bin')
+  },
+
+  async restoreBinItem(entityType: string, id: string) {
+    return performFetch<{ restored: boolean }>('/api/mobile/v1/bin', {
+      method: 'POST',
+      body: JSON.stringify({ entityType, id, action: 'restore' }),
+      retries: 0,
+    })
   },
 }
 export * from './types'

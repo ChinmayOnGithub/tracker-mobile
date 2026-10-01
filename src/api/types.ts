@@ -85,3 +85,62 @@ export interface WeightRecord {
   createdAt?: string
   updatedAt?: string
 }
+
+export interface CreateTemplateInput {
+  name: string
+  category: string
+  type?: string
+  priority?: string
+  estimatedDuration?: number
+  icon: string
+  color: string
+  notes?: string | null
+  amount?: number | null
+  recurrenceType: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' | 'milestone' | 'one_time'
+  recurrenceInterval?: number | null
+  recurrenceDaysOfWeek?: string | null
+  recurrenceDayOfMonth?: number | null
+  recurrenceMonth?: number | null
+  targetDate?: string | null
+  remindBeforeDays?: number | null
+  scheduledTime?: string | null
+}
+
+export interface UpdateTemplateInput extends Partial<CreateTemplateInput> {
+  isActive?: boolean
+  sortOrder?: number
+}
+
+export interface JournalEntry {
+  id: string
+  userId: string
+  journalDate: string
+  content: string
+  mood: string | null
+  gratitude: string | null
+  reflections: string | null
+  lessonsLearned: string | null
+  tomorrowPlan: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface NoteItem {
+  id: string
+  userId: string
+  date: string
+  title: string | null
+  content: string
+  version?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface BinItem {
+  id: string
+  entityType: 'journal' | 'note' | 'activity_template' | 'weight'
+  title: string
+  preview?: string | null
+  deletedAt: string
+}

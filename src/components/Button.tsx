@@ -21,6 +21,7 @@ export interface ButtonProps {
   disabled?: boolean
   style?: StyleProp<ViewStyle>
   labelStyle?: StyleProp<TextStyle>
+  accessibilityLabel?: string
   accessibilityHint?: string
 }
 
@@ -33,6 +34,7 @@ export function Button({
   disabled = false,
   style,
   labelStyle,
+  accessibilityLabel,
   accessibilityHint,
 }: ButtonProps) {
   const isDisabled = disabled || loading
@@ -83,7 +85,7 @@ export function Button({
   return (
     <Pressable
       accessibilityHint={accessibilityHint}
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel || label}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}

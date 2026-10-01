@@ -43,6 +43,26 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="journal"
+        options={{
+          title: 'Journal',
+          tabBarAccessibilityLabel: 'Journal tab',
+          tabBarIcon: ({ color }) => (
+            <TrackerIcon name="journal" size="sm" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notes"
+        options={{
+          title: 'Notes',
+          tabBarAccessibilityLabel: 'Notes tab',
+          tabBarIcon: ({ color }) => (
+            <TrackerIcon name="notes" size="sm" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
