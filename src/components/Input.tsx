@@ -17,6 +17,7 @@ export interface InputProps extends TextInputProps {
   helperText?: string
   containerStyle?: StyleProp<ViewStyle>
   inputStyle?: StyleProp<TextStyle>
+  rightAccessory?: React.ReactNode
 }
 
 export function Input({
@@ -26,6 +27,7 @@ export function Input({
   containerStyle,
   inputStyle,
   secureTextEntry,
+  rightAccessory,
   onFocus,
   onBlur,
   ...rest
@@ -35,26 +37,32 @@ export function Input({
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput
-        accessibilityLabel={label ?? rest.placeholder}
-        onBlur={(e) => {
-          setFocused(false)
-          onBlur?.(e)
-        }}
-        onFocus={(e) => {
-          setFocused(true)
-          onFocus?.(e)
-        }}
-        placeholderTextColor={colors.textMuted}
-        secureTextEntry={secureTextEntry}
+      <View
         style={[
-          styles.input,
+          styles.inputRow,
           focused && styles.inputFocused,
           error ? styles.inputError : undefined,
-          inputStyle,
         ]}
-        {...rest}
-      />
+      >
+        <TextInput
+          accessibilityLabel={label ?? rest.placeholder}
+          onBlur={(e) => {
+            setFocused(false)
+            onBlur?.(e)
+          }}
+          onFocus={(e) => {
+            setFocused(true)
+            onFocus?.(e)
+          }}
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry={secureTextEntry}
+          style={[styles.input, inputStyle]}
+          {...rest}
+        />
+        {rightAccessory ? (
+          <View style={styles.accessory}>{rightAccessory}</View>
+        ) : null}
+      </View>
       {error ? (
         <Text accessibilityRole="alert" style={styles.errorText}>
           {error}
@@ -76,16 +84,26 @@ const styles = StyleSheet.create({
     lineHeight: typography.sm.lineHeight,
     fontWeight: '600',
   },
-  input: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radius.md,
+    minHeight: layout.minTouchTarget,
+  },
+  input: {
+    flex: 1,
     color: colors.text,
     fontSize: typography.base.fontSize,
-    minHeight: layout.minTouchTarget,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  accessory: {
+    paddingRight: spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   inputFocused: {
     borderColor: colors.primary,

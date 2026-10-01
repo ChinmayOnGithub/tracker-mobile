@@ -189,12 +189,24 @@ export const trackerApi = {
     return () => sessionListeners.delete(callback)
   },
 
-  async login(username: string, pin: string) {
+  async login(username: string, secret: string) {
     return performFetch<{ token: string; user: MobileUser }>(
       '/api/mobile/v1/auth/login',
       {
         method: 'POST',
-        body: JSON.stringify({ username, pin }),
+        body: JSON.stringify({ username, password: secret, pin: secret }),
+        authenticated: false,
+        retries: 0,
+      }
+    )
+  },
+
+  async register(username: string, password: string) {
+    return performFetch<{ token: string; user: MobileUser }>(
+      '/api/mobile/v1/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
         authenticated: false,
         retries: 0,
       }

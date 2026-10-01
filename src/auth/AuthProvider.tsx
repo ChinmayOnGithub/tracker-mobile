@@ -65,9 +65,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, [])
 
-  const login = useCallback(async (username: string, pin: string) => {
+  const login = useCallback(async (username: string, secret: string) => {
     setError(null)
-    const result = await trackerApi.login(username.trim(), pin)
+    const result = await trackerApi.login(username.trim(), secret)
+    await setToken(result.token)
+    setUser(result.user)
+  }, [])
+
+  const register = useCallback(async (username: string, secret: string) => {
+    setError(null)
+    const result = await trackerApi.register(username.trim(), secret)
     await setToken(result.token)
     setUser(result.user)
   }, [])
@@ -85,10 +92,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAuthenticated: user !== null,
       error,
       login,
+      register,
       logout,
       clearError,
     }),
-    [user, isLoading, error, login, logout, clearError]
+    [user, isLoading, error, login, register, logout, clearError]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
