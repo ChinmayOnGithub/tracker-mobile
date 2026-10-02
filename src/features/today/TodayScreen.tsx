@@ -697,9 +697,6 @@ export function TodayScreen() {
 
       {error ? <ErrorView message={error} /> : null}
 
-      {/* Google Calendar Events Section */}
-      <CalendarEventsSection events={calendarEvents} />
-
       {/* Primary Section: TASKS */}
       <View style={styles.taskSection}>
         <View style={styles.sectionHeader}>
@@ -759,13 +756,14 @@ export function TodayScreen() {
         />
       </View>
 
-      {/* Secondary Dashboard Widgets */}
+      {/* Dashboard Widgets */}
       <View style={styles.widgetsSection}>
         <WorkSessionCard date={selectedDate} />
         <LeaveWidgetCard selectedDate={selectedDate} onLeaveChanged={() => void load()} />
         <JournalWidgetCard date={selectedDate} />
         <DailyCodingCard date={selectedDate} />
         <WeightWidgetCard date={selectedDate} />
+        <CalendarEventsSection events={calendarEvents} />
       </View>
 
       {/* Task Context Action Modal */}
