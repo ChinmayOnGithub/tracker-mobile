@@ -76,8 +76,9 @@ export function JournalScreen() {
     isDirtyRef.current = false
 
     // Check fastCache first for instant 0ms render
-    const cached = fastCache.get<JournalEntry | null>(`journal:${dateStr}`)
-    if (cached !== undefined) {
+    const cacheKey = `journal:${dateStr}`
+    const cached = fastCache.get<JournalEntry | null>(cacheKey)
+    if (fastCache.has(cacheKey)) {
       if (cached) {
         setEntry(cached)
         setContent(cached.content || '')
