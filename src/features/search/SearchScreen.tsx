@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'expo-router'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSQLiteContext } from 'expo-sqlite'
 import { Search as SearchIcon, X } from 'lucide-react-native'
@@ -46,6 +47,31 @@ export function SearchScreen() {
   const [searching, setSearching] = useState(false)
   const requestId = useRef(0)
   const repository = useMemo(() => new SearchRepository(db), [db])
+  const router = useRouter()
+
+  const handleResultPress = useCallback((item: SearchResult) => {
+    switch (item.entityType) {
+      case 'activity_template':
+        router.push('/activities')
+        break
+      case 'activity_log':
+      case 'task':
+        router.push('/')
+        break
+      case 'note':
+        router.push('/notes')
+        break
+      case 'journal':
+        router.push('/journal')
+        break
+      case 'calendar_event':
+        router.push('/calendar')
+        break
+      case 'vault':
+        router.push('/vault')
+        break
+    }
+  }, [router])
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -77,9 +103,9 @@ export function SearchScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: SearchResult }) => (
-      <SearchRow item={item} onPress={() => undefined} />
+      <SearchRow item={item} onPress={handleResultPress} />
     ),
-    []
+    [handleResultPress]
   )
 
   return (
