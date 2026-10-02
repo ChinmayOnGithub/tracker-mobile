@@ -9,6 +9,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native'
+import { useTheme } from '@/theme/ThemeContext'
 import { colors, layout, radius, spacing, typography } from '@/theme/tokens'
 
 export interface InputProps extends TextInputProps {
@@ -32,16 +33,19 @@ export function Input({
   onBlur,
   ...rest
 }: InputProps) {
+  const { colors } = useTheme()
   const [focused, setFocused] = useState(false)
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? <Text style={[styles.label, { color: colors.text }]}>{label}</Text> : null}
       <View
         style={[
           styles.inputRow,
-          focused && styles.inputFocused,
-          error ? styles.inputError : undefined,
+          {
+            backgroundColor: colors.surface,
+            borderColor: error ? colors.danger : focused ? colors.primary : colors.border,
+          },
         ]}
       >
         <TextInput
@@ -56,7 +60,7 @@ export function Input({
           }}
           placeholderTextColor={colors.textMuted}
           secureTextEntry={secureTextEntry}
-          style={[styles.input, inputStyle]}
+          style={[styles.input, { color: colors.text }, inputStyle]}
           {...rest}
         />
         {rightAccessory ? (

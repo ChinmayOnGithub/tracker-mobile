@@ -8,6 +8,8 @@ import {
 } from 'react-native'
 import type { TaskOccurrence } from '@/domain/timeline'
 import { TrackerIcon } from '@/components/TrackerIcon'
+import { ActivitySymbolBadge } from '@/features/activities/components/ActivitySymbolBadge'
+import { useTheme } from '@/theme/ThemeContext'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 
 interface TodayTaskRowProps {
@@ -23,6 +25,7 @@ export function TodayTaskRow({
   onCycleStatus,
   onOpenActions,
 }: TodayTaskRowProps) {
+  const { colors } = useTheme()
   const isDone = task.isCompleted
   const isCanceled = task.isCanceled
   const isPostponed = task.isPostponed
@@ -39,7 +42,7 @@ export function TodayTaskRow({
         onPress={() => onCycleStatus(task)}
         style={[
           styles.checkbox,
-          isDone && styles.checkboxDone,
+          isDone && { backgroundColor: colors.coral, borderColor: colors.coral },
           isCanceled && styles.checkboxCanceled,
           isPostponed && styles.checkboxPostponed,
         ]}
@@ -56,6 +59,13 @@ export function TodayTaskRow({
           <View style={styles.checkboxEmpty} />
         )}
       </Pressable>
+
+      {/* Activity Symbol Badge */}
+      <ActivitySymbolBadge
+        symbol={task.icon}
+        color={task.color}
+        size="sm"
+      />
 
       {/* Main Task Info */}
       <Pressable

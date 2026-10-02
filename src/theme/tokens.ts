@@ -1,4 +1,67 @@
-export const colors = {
+export type ThemeMode = 'system' | 'dark' | 'light'
+export type AccentKey = 'coral' | 'indigo' | 'emerald' | 'sky' | 'purple' | 'amber' | 'rose'
+
+export interface AccentOption {
+  key: AccentKey
+  label: string
+  color: string
+  subtle: string
+  hover: string
+}
+
+export const ACCENT_OPTIONS: readonly AccentOption[] = [
+  {
+    key: 'coral',
+    label: 'Tracker Coral',
+    color: '#ff7557',
+    subtle: 'rgba(255, 117, 87, 0.15)',
+    hover: '#f9a68e',
+  },
+  {
+    key: 'indigo',
+    label: 'Indigo',
+    color: '#6366f1',
+    subtle: 'rgba(99, 102, 241, 0.15)',
+    hover: '#4f46e5',
+  },
+  {
+    key: 'emerald',
+    label: 'Emerald',
+    color: '#10b981',
+    subtle: 'rgba(16, 185, 129, 0.15)',
+    hover: '#059669',
+  },
+  {
+    key: 'sky',
+    label: 'Sky Blue',
+    color: '#38bdf8',
+    subtle: 'rgba(56, 189, 248, 0.15)',
+    hover: '#0284c7',
+  },
+  {
+    key: 'purple',
+    label: 'Purple',
+    color: '#8b5cf6',
+    subtle: 'rgba(139, 92, 246, 0.15)',
+    hover: '#7c3aed',
+  },
+  {
+    key: 'amber',
+    label: 'Amber',
+    color: '#f59e0b',
+    subtle: 'rgba(245, 158, 11, 0.15)',
+    hover: '#d97706',
+  },
+  {
+    key: 'rose',
+    label: 'Rose',
+    color: '#ec4899',
+    subtle: 'rgba(236, 72, 153, 0.15)',
+    hover: '#db2777',
+  },
+] as const
+
+export const darkPalette = {
   background: '#090b0e',
   surface: '#14171d',
   surfaceRaised: '#1a1f27',
@@ -31,16 +94,70 @@ export const colors = {
   purple: '#8b5cf6',
   amber: '#f59e0b',
   rose: '#ec4899',
-} as const
+}
+
+export const lightPalette = {
+  background: '#f8fafc',
+  surface: '#ffffff',
+  surfaceRaised: '#f1f5f9',
+  border: '#e2e8f0',
+  borderMuted: '#cbd5e1',
+  text: '#0f172a',
+  textMuted: '#64748b',
+  textSubtle: '#94a3b8',
+  white: '#ffffff',
+
+  // Canonical Tracker Brand
+  coral: '#ff7557',
+  coralSubtle: 'rgba(255, 117, 87, 0.15)',
+  coralHover: '#e05335',
+
+  // Core Accents
+  primary: '#6366f1',
+  primaryHover: '#4f46e5',
+  primarySubtle: 'rgba(99, 102, 241, 0.15)',
+  success: '#16a34a',
+  successSubtle: 'rgba(22, 163, 74, 0.15)',
+  warning: '#d97706',
+  warningSubtle: 'rgba(217, 119, 6, 0.15)',
+  danger: '#dc2626',
+  dangerSubtle: 'rgba(220, 38, 38, 0.15)',
+
+  // Preset Palette for Habits & Badges
+  emerald: '#059669',
+  sky: '#0284c7',
+  purple: '#7c3aed',
+  amber: '#d97706',
+  rose: '#db2777',
+}
+
+export type ThemeColors = typeof darkPalette
+
+export function createThemeColors(
+  mode: 'dark' | 'light',
+  accentKey: AccentKey = 'coral'
+): ThemeColors {
+  const base = mode === 'light' ? lightPalette : darkPalette
+  const accent = ACCENT_OPTIONS.find((a) => a.key === accentKey) || ACCENT_OPTIONS[0]
+  return {
+    ...base,
+    primary: accent.color,
+    primaryHover: accent.hover,
+    primarySubtle: accent.subtle,
+  }
+}
+
+// Canonical static colors export for backward compatibility
+export const colors = darkPalette
 
 export const paletteColors = [
-  colors.coral,
-  colors.emerald,
-  colors.primary,
-  colors.purple,
-  colors.warning,
-  colors.sky,
-  colors.rose,
+  darkPalette.coral,
+  darkPalette.emerald,
+  darkPalette.primary,
+  darkPalette.purple,
+  darkPalette.warning,
+  darkPalette.sky,
+  darkPalette.rose,
 ] as const
 
 export const spacing = {

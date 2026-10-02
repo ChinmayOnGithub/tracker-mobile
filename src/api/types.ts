@@ -3,6 +3,27 @@ export interface MobileUser {
   username: string
   email: string | null
   isOwner: boolean
+  isPro?: boolean
+  tier?: 'FREE' | 'PRO' | 'TEAM'
+  plan?: string
+}
+
+export interface BillingSubscription {
+  id: string
+  status: string
+  planId: string
+  currentPeriodStart: string | null
+  currentPeriodEnd: string | null
+  cancelAtPeriodEnd: boolean
+}
+
+export interface BillingEntitlementsResponse {
+  isPro: boolean
+  tier: 'FREE' | 'PRO' | 'TEAM'
+  plan: string
+  features: Record<string, boolean>
+  limits: Record<string, number>
+  subscription: BillingSubscription | null
 }
 
 export interface ActivityTemplate {

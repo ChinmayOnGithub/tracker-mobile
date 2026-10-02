@@ -11,7 +11,9 @@ import type { ActivityTemplate, CreateTemplateInput } from '@/api/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, paletteColors, radius, spacing, typography } from '@/theme/tokens'
+import { SymbolPicker } from './SymbolPicker'
+import { useTheme } from '@/theme/ThemeContext'
+import { paletteColors, radius, spacing, typography } from '@/theme/tokens'
 
 const FORM_CATEGORIES = ['work', 'personal', 'fitness', 'health', 'learning', 'finance']
 const RECURRENCE_OPTIONS: CreateTemplateInput['recurrenceType'][] = [
@@ -30,6 +32,7 @@ export interface ActivityFormData {
   recurrenceType: CreateTemplateInput['recurrenceType']
   color: string
   priority: string
+  icon?: string
   notes?: string | null
 }
 
@@ -50,11 +53,13 @@ export function ActivityFormModal({
   onClose,
   onSubmit,
 }: ActivityFormModalProps) {
+  const { colors } = useTheme()
   const [formName, setFormName] = useState('')
   const [formCategory, setFormCategory] = useState('work')
   const [formRecurrence, setFormRecurrence] = useState<CreateTemplateInput['recurrenceType']>('daily')
   const [formColor, setFormColor] = useState<string>(paletteColors[0])
   const [formPriority, setFormPriority] = useState<string>('NORMAL')
+  const [formIcon, setFormIcon] = useState<string>('activity')
   const [formNotes, setFormNotes] = useState<string>('')
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -69,6 +74,7 @@ export function ActivityFormModal({
           ? initialData.priority
           : 'NORMAL'
       )
+      setFormIcon(initialData.icon || 'activity')
       setFormNotes(initialData.notes || '')
     } else {
       setFormName('')
@@ -76,6 +82,7 @@ export function ActivityFormModal({
       setFormRecurrence('daily')
       setFormColor(paletteColors[0])
       setFormPriority('NORMAL')
+      setFormIcon('activity')
       setFormNotes('')
     }
     setValidationError(null)
@@ -101,6 +108,7 @@ export function ActivityFormModal({
       recurrenceType: formRecurrence,
       color: formColor,
       priority: formPriority,
+      icon: formIcon,
       notes: formNotes.trim() || null,
     })
   }
@@ -116,9 +124,9 @@ export function ActivityFormModal({
       onRequestClose={handleClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
+        <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
               {isEditing ? 'Edit Activity Template' : 'New Activity Template'}
             </Text>
             <TouchableOpacity
@@ -132,7 +140,7 @@ export function ActivityFormModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.modalBody}>
-            <Text style={styles.label}>Activity Name</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Activity Name</Text>
             <Input
               placeholder="e.g. Morning Workout"
               value={formName}
@@ -140,7 +148,15 @@ export function ActivityFormModal({
               autoFocus={!isEditing}
             />
 
-            <Text style={styles.label}>Category</Text>
+            {/* Symbol Picker */}
+            <Text style={[styles.label, { color: colors.text }]}>Activity Symbol</Text>
+            <SymbolPicker
+              selectedSymbol={formIcon}
+              color={formColor}
+              onSelect={(symbol) => setFormIcon(symbol.value)}
+            />
+
+            <Text style={[styles.label, { color: colors.text }]}>Category</Text>
             <View style={styles.optionRow}>
               {FORM_CATEGORIES.map((cat) => (
                 <TouchableOpacity
@@ -148,7 +164,8 @@ export function ActivityFormModal({
                   onPress={() => setFormCategory(cat)}
                   style={[
                     styles.optionChip,
-                    formCategory === cat && styles.optionChipActive,
+                    { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
+                    formCategory === cat && { backgroundColor: colors.primary, borderColor: colors.primary },
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Select category ${cat}`}
@@ -156,7 +173,8 @@ export function ActivityFormModal({
                   <Text
                     style={[
                       styles.optionChipText,
-                      formCategory === cat && styles.optionChipTextActive,
+                      { color: colors.textMuted },
+                      formCategory === cat && { color: colors.white, fontWeight: '700' },
                     ]}
                   >
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}
@@ -165,7 +183,7 @@ export function ActivityFormModal({
               ))}
             </View>
 
-            <Text style={styles.label}>Recurrence</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Recurrence</Text>
             <View style={styles.optionRow}>
               {RECURRENCE_OPTIONS.map((rec) => (
                 <TouchableOpacity
@@ -173,7 +191,8 @@ export function ActivityFormModal({
                   onPress={() => setFormRecurrence(rec)}
                   style={[
                     styles.optionChip,
-                    formRecurrence === rec && styles.optionChipActive,
+                    { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
+                    formRecurrence === rec && { backgroundColor: colors.primary, borderColor: colors.primary },
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Select recurrence ${rec}`}
@@ -181,7 +200,8 @@ export function ActivityFormModal({
                   <Text
                     style={[
                       styles.optionChipText,
-                      formRecurrence === rec && styles.optionChipTextActive,
+                      { color: colors.textMuted },
+                      formRecurrence === rec && { color: colors.white, fontWeight: '700' },
                     ]}
                   >
                     {rec === 'one_time' ? 'One-time' : rec.charAt(0).toUpperCase() + rec.slice(1)}
@@ -190,7 +210,7 @@ export function ActivityFormModal({
               ))}
             </View>
 
-            <Text style={styles.label}>Priority</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Priority</Text>
             <View style={styles.optionRow}>
               {PRIORITY_OPTIONS.map((p) => (
                 <TouchableOpacity
@@ -198,7 +218,8 @@ export function ActivityFormModal({
                   onPress={() => setFormPriority(p)}
                   style={[
                     styles.optionChip,
-                    formPriority === p && styles.optionChipActive,
+                    { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
+                    formPriority === p && { backgroundColor: colors.primary, borderColor: colors.primary },
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Select priority ${p}`}
@@ -206,7 +227,8 @@ export function ActivityFormModal({
                   <Text
                     style={[
                       styles.optionChipText,
-                      formPriority === p && styles.optionChipTextActive,
+                      { color: colors.textMuted },
+                      formPriority === p && { color: colors.white, fontWeight: '700' },
                     ]}
                   >
                     {p}
@@ -215,14 +237,14 @@ export function ActivityFormModal({
               ))}
             </View>
 
-            <Text style={styles.label}>Notes / Instructions (Optional)</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Notes / Instructions (Optional)</Text>
             <Input
               placeholder="e.g. 3 sets of 10 reps"
               value={formNotes}
               onChangeText={setFormNotes}
             />
 
-            <Text style={styles.label}>Accent Color</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Accent Color</Text>
             <View style={styles.colorPalette}>
               {paletteColors.map((c) => (
                 <TouchableOpacity
@@ -231,7 +253,7 @@ export function ActivityFormModal({
                   style={[
                     styles.colorCircle,
                     { backgroundColor: c },
-                    formColor === c && styles.colorCircleSelected,
+                    formColor === c && [styles.colorCircleSelected, { borderColor: colors.text }],
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel={`Select color ${c}`}
@@ -240,11 +262,11 @@ export function ActivityFormModal({
             </View>
 
             {displayError ? (
-              <Text style={styles.formErrorText}>{displayError}</Text>
+              <Text style={[styles.formErrorText, { color: colors.danger }]}>{displayError}</Text>
             ) : null}
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
             <Button
               label="Cancel"
               variant="ghost"
@@ -270,13 +292,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
-    maxHeight: '88%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -284,10 +305,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   modalTitle: {
-    color: colors.text,
     fontSize: typography.lg.fontSize,
     fontWeight: '700',
   },
@@ -296,7 +315,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   label: {
-    color: colors.text,
     fontSize: typography.xs.fontSize,
     fontWeight: '600',
     marginTop: spacing.xs,
@@ -310,22 +328,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  optionChipActive: {
-    backgroundColor: colors.coral,
-    borderColor: colors.coral,
   },
   optionChipText: {
-    color: colors.textMuted,
     fontSize: typography.xs.fontSize,
     fontWeight: '500',
-  },
-  optionChipTextActive: {
-    color: colors.white,
-    fontWeight: '700',
   },
   colorPalette: {
     flexDirection: 'row',
@@ -339,10 +346,8 @@ const styles = StyleSheet.create({
   },
   colorCircleSelected: {
     borderWidth: 3,
-    borderColor: colors.white,
   },
   formErrorText: {
-    color: colors.danger,
     fontSize: typography.xs.fontSize,
     marginTop: 4,
   },
@@ -352,6 +357,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
 })

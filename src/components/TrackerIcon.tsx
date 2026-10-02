@@ -10,15 +10,22 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Code,
+  Coffee,
+  Crown,
   Download,
+  Dumbbell,
   Eye,
   EyeOff,
   FileText,
   Filter,
+  Flame,
+  Heart,
   Home,
   Link as LinkIcon,
   Lock,
   LogOut,
+  Moon,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -29,11 +36,15 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Sun,
+  Target,
   Trash2,
+  Trophy,
   Unlock,
   Upload,
   User,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react-native'
 import { colors } from '@/theme/tokens'
@@ -51,6 +62,7 @@ export type TrackerIconName =
   | 'sticky-note'
   | 'link'
   | 'vault'
+  | 'shield'
   | 'trash'
   | 'delete'
   | 'settings'
@@ -77,6 +89,17 @@ export type TrackerIconName =
   | 'refresh'
   | 'user'
   | 'logout'
+  | 'flame'
+  | 'target'
+  | 'zap'
+  | 'heart'
+  | 'coffee'
+  | 'code'
+  | 'dumbbell'
+  | 'moon'
+  | 'sun'
+  | 'trophy'
+  | 'crown'
 
 export type TrackerIconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number
 
@@ -93,6 +116,7 @@ const ICON_REGISTRY: Record<TrackerIconName, LucideIcon> = {
   'sticky-note': FileText,
   link: LinkIcon,
   vault: Shield,
+  shield: Shield,
   trash: Trash2,
   delete: Trash2,
   settings: Settings,
@@ -119,6 +143,17 @@ const ICON_REGISTRY: Record<TrackerIconName, LucideIcon> = {
   refresh: RefreshCw,
   user: User,
   logout: LogOut,
+  flame: Flame,
+  target: Target,
+  zap: Zap,
+  heart: Heart,
+  coffee: Coffee,
+  code: Code,
+  dumbbell: Dumbbell,
+  moon: Moon,
+  sun: Sun,
+  trophy: Trophy,
+  crown: Crown,
 }
 
 const SIZE_MAP: Record<Exclude<TrackerIconSize, number>, number> = {

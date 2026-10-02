@@ -510,5 +510,9 @@ export const trackerApi = {
       retries: 0,
     })
   },
+
+  async getBilling() {
+    return performFetch<import('./types').BillingEntitlementsResponse>('/api/mobile/v1/billing')
+  },
 }
 export * from './types'

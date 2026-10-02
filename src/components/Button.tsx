@@ -7,6 +7,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native'
+import { useTheme } from '@/theme/ThemeContext'
 import { colors, layout, radius, spacing, typography } from '@/theme/tokens'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'ghost' | 'outline'
@@ -37,43 +38,40 @@ export function Button({
   accessibilityLabel,
   accessibilityHint,
 }: ButtonProps) {
+  const { colors } = useTheme()
   const isDisabled = disabled || loading
 
   const variantStyle =
     variant === 'secondary'
-      ? styles.secondary
+      ? { backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderWidth: 1 }
       : variant === 'destructive'
-      ? styles.destructive
+      ? { backgroundColor: colors.danger }
       : variant === 'ghost'
-      ? styles.ghost
+      ? { backgroundColor: 'transparent' }
       : variant === 'outline'
-      ? styles.outline
-      : styles.primary
+      ? { backgroundColor: 'transparent', borderColor: colors.border, borderWidth: 1 }
+      : { backgroundColor: colors.primary }
 
   const pressedStyle =
     variant === 'secondary'
-      ? styles.secondary_pressed
+      ? { backgroundColor: colors.border }
       : variant === 'destructive'
-      ? styles.destructive_pressed
+      ? { opacity: 0.85 }
       : variant === 'ghost'
-      ? styles.ghost_pressed
+      ? { backgroundColor: colors.primarySubtle }
       : variant === 'outline'
-      ? styles.outline_pressed
-      : styles.primary_pressed
+      ? { backgroundColor: colors.surfaceRaised, borderColor: colors.textMuted }
+      : { backgroundColor: colors.primaryHover }
 
   const sizeStyle =
     size === 'sm' ? styles.size_sm : size === 'lg' ? styles.size_lg : styles.size_md
 
-  const labelVariantStyle =
-    variant === 'secondary'
-      ? styles.label_secondary
-      : variant === 'destructive'
-      ? styles.label_destructive
+  const labelColor =
+    variant === 'primary' || variant === 'destructive'
+      ? colors.white
       : variant === 'ghost'
-      ? styles.label_ghost
-      : variant === 'outline'
-      ? styles.label_outline
-      : styles.label_primary
+      ? colors.primary
+      : colors.text
 
   const labelSizeStyle =
     size === 'sm'
@@ -105,7 +103,7 @@ export function Button({
           size="small"
         />
       ) : (
-        <Text style={[styles.label, labelVariantStyle, labelSizeStyle, labelStyle]}>
+        <Text style={[styles.label, { color: labelColor }, labelSizeStyle, labelStyle]}>
           {label}
         </Text>
       )}

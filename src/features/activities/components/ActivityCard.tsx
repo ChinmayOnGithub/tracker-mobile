@@ -2,7 +2,9 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ActivityTemplate } from '@/api/client'
 import { Card } from '@/components/Card'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, spacing, typography } from '@/theme/tokens'
+import { ActivitySymbolBadge } from './ActivitySymbolBadge'
+import { useTheme } from '@/theme/ThemeContext'
+import { spacing, typography } from '@/theme/tokens'
 
 interface ActivityCardProps {
   template: ActivityTemplate
@@ -11,6 +13,8 @@ interface ActivityCardProps {
 }
 
 export function ActivityCard({ template, onDelete, onPress }: ActivityCardProps) {
+  const { colors } = useTheme()
+
   return (
     <Card style={styles.card}>
       <TouchableOpacity
@@ -18,17 +22,14 @@ export function ActivityCard({ template, onDelete, onPress }: ActivityCardProps)
         onPress={() => onPress?.(template)}
         style={styles.cardRow}
       >
-        <View
-          style={[
-            styles.indicator,
-            {
-              backgroundColor: template.color || colors.primary,
-            },
-          ]}
+        <ActivitySymbolBadge
+          symbol={template.icon}
+          color={template.color}
+          size="md"
         />
         <View style={styles.copy}>
-          <Text style={styles.name}>{template.name}</Text>
-          <Text style={styles.meta}>
+          <Text style={[styles.name, { color: colors.text }]}>{template.name}</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             {template.category.toUpperCase()} • {template.recurrenceType.toUpperCase()}
           </Text>
         </View>
@@ -56,25 +57,18 @@ const styles = StyleSheet.create({
   cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-  },
-  indicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    gap: spacing.md,
   },
   copy: {
     flex: 1,
     gap: 2,
   },
   name: {
-    color: colors.text,
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.lineHeight,
     fontWeight: '700',
   },
   meta: {
-    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '500',
   },

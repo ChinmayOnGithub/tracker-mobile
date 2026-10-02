@@ -6,6 +6,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
+import { useTheme } from '@/theme/ThemeContext'
 import { colors, radius, spacing } from '@/theme/tokens'
 
 export interface CardProps extends PropsWithChildren {
@@ -24,6 +25,8 @@ export function Card({
   accessibilityLabel,
   accessibilityHint,
 }: CardProps) {
+  const { colors } = useTheme()
+
   if (onPress) {
     return (
       <Pressable
@@ -35,8 +38,11 @@ export function Card({
         onPress={onPress}
         style={({ pressed }) => [
           styles.card,
+          {
+            backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+            borderColor: colors.border,
+          },
           styles.interactive,
-          pressed && styles.pressed,
           disabled && styles.disabled,
           style,
         ]}
@@ -49,7 +55,14 @@ export function Card({
   return (
     <View
       accessibilityLabel={accessibilityLabel}
-      style={[styles.card, style]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+        style,
+      ]}
     >
       {children}
     </View>

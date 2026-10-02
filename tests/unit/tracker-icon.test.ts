@@ -62,6 +62,17 @@ describe('TrackerIcon Semantic Registry', () => {
     'refresh',
     'user',
     'logout',
+    'flame',
+    'target',
+    'zap',
+    'heart',
+    'coffee',
+    'code',
+    'dumbbell',
+    'moon',
+    'sun',
+    'trophy',
+    'crown',
   ]
 
   it('maps every semantic icon name without returning null or throwing', () => {

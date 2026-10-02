@@ -101,6 +101,7 @@ export function ActivitiesScreen() {
           recurrenceType: data.recurrenceType,
           color: data.color,
           priority: data.priority,
+          icon: data.icon,
           notes: data.notes,
         }
         const res = await trackerApi.updateTemplate(data.id, updateInput)
@@ -115,7 +116,7 @@ export function ActivitiesScreen() {
           category: data.category,
           recurrenceType: data.recurrenceType,
           color: data.color,
-          icon: 'activity',
+          icon: data.icon || 'activity',
           priority: data.priority,
           notes: data.notes,
         }

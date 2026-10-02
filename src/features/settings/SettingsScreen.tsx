@@ -1,20 +1,30 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Alert, StyleSheet, Text, View } from 'react-native'
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import { useSQLiteContext } from 'expo-sqlite'
 import { trackerApi } from '@/api/client'
 import { useAuth } from '@/auth/AuthProvider'
+import { useEntitlements } from '@/auth/EntitlementProvider'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { OutboxRepository } from '@/db/repository'
 import { drainOutbox } from '@/sync'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
+import {
+  ACCENT_OPTIONS,
+  ThemeMode,
+  radius,
+  spacing,
+  typography,
+} from '@/theme/tokens'
 import { LeaveModal } from '@/features/leave/LeaveModal'
 
 export function SettingsScreen() {
   const { user, logout } = useAuth()
+  const { isPro, refreshEntitlements } = useEntitlements()
+  const { mode, setMode, accent, setAccent, colors } = useTheme()
   const db = useSQLiteContext()
   const outboxRepo = useMemo(() => new OutboxRepository(db), [db])
 
@@ -35,7 +45,8 @@ export function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       void refreshPendingCount()
-    }, [refreshPendingCount])
+      void refreshEntitlements()
+    }, [refreshPendingCount, refreshEntitlements])
   )
 
   const handleDrainOutbox = async () => {
@@ -88,22 +99,154 @@ export function SettingsScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text style={styles.title}>Settings & More</Text>
-        <Text style={styles.subtitle}>
-          Account, offline queue, Google Calendar, and recovery bin.
+        <Text style={[styles.title, { color: colors.text }]}>Settings & More</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          Account, theme, offline queue, Google Calendar, and recovery bin.
         </Text>
       </View>
+
+      {/* Appearance & Themes Card */}
+      <Card style={styles.card}>
+        <View style={styles.iconHeadingWrap}>
+          <View style={[styles.paletteIconWrap, { backgroundColor: `${colors.primary}22` }]}>
+            <TrackerIcon name="sparkles" size="sm" color={colors.primary} />
+          </View>
+          <View style={styles.binCopyWrap}>
+            <Text style={[styles.cardHeading, { color: colors.text }]}>Appearance & Theme</Text>
+            <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
+              Customize mode (Dark, Light, System) and accent colors.
+            </Text>
+          </View>
+        </View>
+
+        {/* Theme Mode Chips */}
+        <Text style={[styles.subLabel, { color: colors.textMuted }]}>THEME MODE</Text>
+        <View style={styles.themeModeRow}>
+          {(['system', 'dark', 'light'] as ThemeMode[]).map((m) => {
+            const active = mode === m
+            return (
+              <TouchableOpacity
+                key={m}
+                onPress={() => setMode(m)}
+                style={[
+                  styles.modeButton,
+                  { backgroundColor: colors.surfaceRaised, borderColor: colors.border },
+                  active && { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Theme mode ${m}`}
+              >
+                <Text
+                  style={[
+                    styles.modeButtonText,
+                    { color: colors.textMuted },
+                    active && { color: colors.white, fontWeight: '700' },
+                  ]}
+                >
+                  {m === 'system' ? 'System' : m === 'dark' ? 'Dark' : 'Light'}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        {/* Accent Color Palette */}
+        <Text style={[styles.subLabel, { color: colors.textMuted }]}>ACCENT COLOR</Text>
+        <View style={styles.accentGrid}>
+          {ACCENT_OPTIONS.map((opt) => {
+            const isSelected = accent === opt.key
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                onPress={() => setAccent(opt.key)}
+                style={[
+                  styles.accentSwatch,
+                  { backgroundColor: opt.color },
+                  isSelected && [styles.accentSwatchActive, { borderColor: colors.text }],
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Select accent ${opt.label}`}
+              >
+                {isSelected ? (
+                  <TrackerIcon name="check" size="xs" color="#ffffff" />
+                ) : null}
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </Card>
+
+      {/* Subscription & Plan Card */}
+      <Card style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={styles.iconHeadingWrap}>
+            <View
+              style={[
+                styles.planIconWrap,
+                { backgroundColor: isPro ? 'rgba(245, 158, 11, 0.18)' : `${colors.primary}22` },
+              ]}
+            >
+              <TrackerIcon
+                name={isPro ? 'crown' : 'shield'}
+                size="sm"
+                color={isPro ? '#f59e0b' : colors.primary}
+              />
+            </View>
+            <View style={styles.binCopyWrap}>
+              <View style={styles.planHeaderRow}>
+                <Text style={[styles.cardHeading, { color: colors.text }]}>Subscription</Text>
+                <View
+                  style={[
+                    styles.planBadge,
+                    { backgroundColor: isPro ? '#f59e0b25' : colors.surfaceRaised },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.planBadgeText,
+                      { color: isPro ? '#f59e0b' : colors.textMuted },
+                    ]}
+                  >
+                    {isPro ? 'PRO ⚡' : 'FREE'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
+                {isPro
+                  ? 'All premium activity symbols, 2-way calendar sync, and unlimited features unlocked.'
+                  : 'Essential tracking active. Extended emoji & wireframe symbols require Pro.'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {!isPro && (
+          <Button
+            label="Upgrade to Pro"
+            variant="primary"
+            size="sm"
+            onPress={() => {
+              Alert.alert(
+                'Tracker Pro',
+                'Tracker Pro unlocks 24+ custom activity symbols, unlimited notes, bi-directional Google Calendar sync, and advanced analytics.\n\nVisit tracker.app/billing or upgrade from the web dashboard.',
+                [{ text: 'OK' }]
+              )
+            }}
+            accessibilityLabel="Upgrade to Tracker Pro"
+          />
+        )}
+      </Card>
 
       {/* Outbox & Offline Sync Card */}
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
-            <View style={styles.outboxIconWrap}>
+            <View style={[styles.outboxIconWrap, { backgroundColor: `${colors.primary}22` }]}>
               <TrackerIcon name="upload" size="sm" color={colors.primary} />
             </View>
             <View style={styles.binCopyWrap}>
-              <Text style={styles.cardHeading}>Offline Outbox Queue</Text>
-              <Text style={styles.cardSubtext}>
+              <Text style={[styles.cardHeading, { color: colors.text }]}>Offline Outbox Queue</Text>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
                 {pendingCount === 0
                   ? 'All changes uploaded to server.'
                   : `${pendingCount} pending mutation${pendingCount === 1 ? '' : 's'} waiting to sync.`}
@@ -124,12 +267,12 @@ export function SettingsScreen() {
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
-            <View style={styles.calendarIconWrap}>
+            <View style={[styles.calendarIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
               <TrackerIcon name="calendar" size="sm" color={colors.sky} />
             </View>
             <View style={styles.binCopyWrap}>
-              <Text style={styles.cardHeading}>Google Calendar Sync</Text>
-              <Text style={styles.cardSubtext}>
+              <Text style={[styles.cardHeading, { color: colors.text }]}>Google Calendar Sync</Text>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
                 Bi-directional sync between Tracker tasks and your Google account.
               </Text>
             </View>
@@ -149,12 +292,12 @@ export function SettingsScreen() {
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
-            <View style={styles.leaveIconWrap}>
+            <View style={[styles.leaveIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
               <TrackerIcon name="calendar" size="sm" color={colors.warning} />
             </View>
             <View style={styles.binCopyWrap}>
-              <Text style={styles.cardHeading}>Time Off & Leave</Text>
-              <Text style={styles.cardSubtext}>
+              <Text style={[styles.cardHeading, { color: colors.text }]}>Time Off & Leave</Text>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
                 View entitlements, remaining balances, and submit leave requests.
               </Text>
             </View>
@@ -163,7 +306,7 @@ export function SettingsScreen() {
             label="Manage"
             variant="outline"
             size="sm"
-            onPress={() => setLeaveModalVisible(true)}
+            onPress={() => setLeaveModalVisible(false || true)}
             accessibilityLabel="Manage Time Off and Leave"
           />
         </View>
@@ -173,12 +316,12 @@ export function SettingsScreen() {
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
-            <View style={styles.binIconWrap}>
+            <View style={[styles.binIconWrap, { backgroundColor: colors.coralSubtle }]}>
               <TrackerIcon name="trash" size="sm" color={colors.coral} />
             </View>
             <View style={styles.binCopyWrap}>
-              <Text style={styles.cardHeading}>Bin / Recovery</Text>
-              <Text style={styles.cardSubtext}>
+              <Text style={[styles.cardHeading, { color: colors.text }]}>Bin / Recovery</Text>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
                 Recover soft-deleted journals, habits, notes, and weight records.
               </Text>
             </View>
@@ -195,27 +338,27 @@ export function SettingsScreen() {
 
       {/* Account Info Card */}
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Account</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Account</Text>
         <View style={styles.item}>
-          <Text style={styles.label}>Username</Text>
-          <Text style={styles.value}>{user?.username ?? 'Not signed in'}</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>Username</Text>
+          <Text style={[styles.value, { color: colors.text }]}>{user?.username ?? 'Not signed in'}</Text>
         </View>
         {user?.email ? (
           <View style={styles.item}>
-            <Text style={styles.label}>Email</Text>
-            <Text style={styles.value}>{user.email}</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Email</Text>
+            <Text style={[styles.value, { color: colors.text }]}>{user.email}</Text>
           </View>
         ) : null}
         <View style={styles.item}>
-          <Text style={styles.label}>Account Role</Text>
-          <Text style={styles.value}>{user?.isOwner ? 'Owner / Admin' : 'Member'}</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>Account Role</Text>
+          <Text style={[styles.value, { color: colors.text }]}>{user?.isOwner ? 'Owner / Admin' : 'Member'}</Text>
         </View>
       </Card>
 
       {/* Offline & Sync Architecture */}
       <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Offline & Local Storage</Text>
-        <Text style={styles.body}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Offline & Local Storage</Text>
+        <Text style={[styles.body, { color: colors.textMuted }]}>
           The mobile client caches activities, calendar events, work sessions, journal entries, and notes locally in SQLite for rapid offline viewing. Auth tokens are secured inside Android Keystore / iOS Keychain via Expo SecureStore.
         </Text>
       </Card>
@@ -243,13 +386,11 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   title: {
-    color: colors.text,
     fontSize: typography.hero.fontSize,
     lineHeight: typography.hero.lineHeight,
     fontWeight: '800',
   },
   subtitle: {
-    color: colors.textMuted,
     fontSize: typography.sm.fontSize,
     lineHeight: typography.sm.lineHeight,
   },
@@ -269,11 +410,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flex: 1,
   },
+  paletteIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   outboxIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -281,7 +435,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -289,7 +442,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -297,7 +449,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.coralSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -305,17 +456,65 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  planHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  planBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  planBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
   cardHeading: {
-    color: colors.text,
     fontSize: typography.md.fontSize,
     fontWeight: '700',
   },
   cardSubtext: {
-    color: colors.textMuted,
     fontSize: typography.xs.fontSize,
   },
+  subLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginTop: spacing.xs,
+  },
+  themeModeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeButtonText: {
+    fontSize: typography.xs.fontSize,
+    fontWeight: '600',
+  },
+  accentGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: 4,
+  },
+  accentSwatch: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accentSwatchActive: {
+    borderWidth: 3,
+  },
   sectionTitle: {
-    color: colors.text,
     fontSize: typography.sm.fontSize,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -327,16 +526,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    color: colors.textMuted,
     fontSize: typography.sm.fontSize,
   },
   value: {
-    color: colors.text,
     fontSize: typography.sm.fontSize,
     fontWeight: '600',
   },
   body: {
-    color: colors.textMuted,
     fontSize: typography.sm.fontSize,
     lineHeight: typography.sm.lineHeight,
   },
