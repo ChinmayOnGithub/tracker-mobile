@@ -88,7 +88,7 @@ export function TodayScreen() {
         const [cachedT, cachedL, cachedE] = await Promise.all([
           templateRepo.getActiveTemplates(),
           logRepo.getByDate(selectedDate),
-          calendarRepo.getByDateRange(selectedDate, selectedDate),
+          calendarRepo.getByDate(selectedDate),
         ])
         setTemplates(cachedT)
         setLogs(cachedL)
@@ -152,7 +152,7 @@ export function TodayScreen() {
         const [freshT, freshL, freshE] = await Promise.all([
           templateRepo.getActiveTemplates(),
           logRepo.getByDate(selectedDate),
-          calendarRepo.getByDateRange(selectedDate, selectedDate),
+          calendarRepo.getByDate(selectedDate),
         ])
         setTemplates(freshT)
         setLogs(freshL)
@@ -178,7 +178,7 @@ export function TodayScreen() {
           const [freshT, freshL, freshE] = await Promise.all([
             templateRepo.getActiveTemplates(),
             logRepo.getByDate(selectedDate),
-            calendarRepo.getByDateRange(selectedDate, selectedDate),
+            calendarRepo.getByDate(selectedDate),
           ])
           setTemplates(freshT)
           setLogs(freshL)
