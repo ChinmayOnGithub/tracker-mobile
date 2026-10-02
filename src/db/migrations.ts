@@ -155,6 +155,25 @@ export const MIGRATIONS: Migration[] = [
       `)
     },
   },
+  {
+    version: 4,
+    name: 'performance_indexes',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_activity_log_date_active
+          ON activity_log(date, deleted_at, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_activity_template_active_name
+          ON activity_template(is_active, deleted_at, name);
+
+        CREATE INDEX IF NOT EXISTS idx_calendar_event_range_deleted
+          ON calendar_event(start_date, end_date, is_deleted);
+
+        CREATE INDEX IF NOT EXISTS idx_mutation_queue_ready
+          ON mutation_queue(status, next_attempt_at, created_at);
+      `)
+    },
+  },
 ]
 
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
