@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { useSQLiteContext } from 'expo-sqlite'
 import { trackerApi, type NoteItem } from '@/api/client'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -85,7 +86,7 @@ export function NotesScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [])
+  }, [db])
 
   useFocusEffect(
     useCallback(() => {
