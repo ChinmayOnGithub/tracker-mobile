@@ -1,5 +1,10 @@
 import { ActivitiesScreen } from '@/features/activities/ActivitiesScreen'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function ActivitiesRoute() {
-  return <ActivitiesScreen />
+  return (
+    <ErrorBoundary fallbackTitle="Activities Error">
+      <ActivitiesScreen />
+    </ErrorBoundary>
+  )
 }
