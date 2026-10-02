@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   KeyboardAvoidingView,
@@ -19,16 +19,14 @@ import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
-
-const MOODS = [
-  { label: 'Great', value: 'great', color: colors.emerald, emoji: '😄' },
-  { label: 'Good', value: 'good', color: colors.sky, emoji: '🙂' },
-  { label: 'Okay', value: 'okay', color: colors.purple, emoji: '😐' },
-  { label: 'Low', value: 'low', color: colors.amber, emoji: '😔' },
-  { label: 'Tough', value: 'tough', color: colors.danger, emoji: '😫' },
-]
-
-type SectionTab = 'entry' | 'gratitude' | 'plan' | 'history'
+import {
+  JOURNAL_MOODS,
+  countChars,
+  countWords,
+  getMoodDetails,
+  prepareJournalPayload,
+  type JournalSectionTab,
+} from './journal-presentation'
 
 export function JournalScreen() {
   const [selectedDate, setSelectedDate] = useState(todayYmd())
@@ -36,15 +34,21 @@ export function JournalScreen() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty' | null>(null)
-  const [activeTab, setActiveTab] = useState<SectionTab>('entry')
+  const [activeTab, setActiveTab] = useState<JournalSectionTab>('entry')
 
   // Form Fields
   const [content, setContent] = useState('')
   const [mood, setMood] = useState<string | null>(null)
   const [gratitude, setGratitude] = useState('')
+  const [reflections, setReflections] = useState('')
+  const [lessonsLearned, setLessonsLearned] = useState('')
   const [tomorrowPlan, setTomorrowPlan] = useState('')
 
   const isToday = selectedDate === todayYmd()
+
+  // Track whether form has unsaved user edits
+  const isDirtyRef = useRef(false)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const pastDays = useMemo(() => {
     const days: { dateStr: string; displayDate: string; isToday: boolean }[] = []
@@ -63,6 +67,7 @@ export function JournalScreen() {
   const loadJournal = useCallback(async (dateStr: string) => {
     setLoading(true)
     setSaveStatus(null)
+    isDirtyRef.current = false
     try {
       const res = await trackerApi.getJournalEntry(dateStr)
       if (res.entry) {
@@ -70,6 +75,8 @@ export function JournalScreen() {
         setContent(res.entry.content || '')
         setMood(res.entry.mood || null)
         setGratitude(res.entry.gratitude || '')
+        setReflections(res.entry.reflections || '')
+        setLessonsLearned(res.entry.lessonsLearned || '')
         setTomorrowPlan(res.entry.tomorrowPlan || '')
         setSaveStatus('saved')
       } else {
@@ -77,6 +84,8 @@ export function JournalScreen() {
         setContent('')
         setMood(null)
         setGratitude('')
+        setReflections('')
+        setLessonsLearned('')
         setTomorrowPlan('')
         setSaveStatus(null)
       }
@@ -84,6 +93,7 @@ export function JournalScreen() {
       setEntry(null)
     } finally {
       setLoading(false)
+      isDirtyRef.current = false
     }
   }, [])
 
@@ -93,24 +103,73 @@ export function JournalScreen() {
     }, [selectedDate, loadJournal])
   )
 
-  const handleSave = async () => {
-    setSaving(true)
-    setSaveStatus('saving')
-    try {
-      const res = await trackerApi.upsertJournalEntry(selectedDate, {
-        content,
-        mood,
-        gratitude: gratitude.trim() || null,
-        tomorrowPlan: tomorrowPlan.trim() || null,
-      })
-      setEntry(res.entry)
-      setSaveStatus('saved')
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save journal entry.')
-      setSaveStatus('dirty')
-    } finally {
-      setSaving(false)
+  const performSave = useCallback(
+    async (targetDate: string, isSilent = false) => {
+      if (saving) return
+      if (!isSilent) setSaving(true)
+      setSaveStatus('saving')
+
+      try {
+        const payload = prepareJournalPayload({
+          content,
+          mood,
+          gratitude,
+          reflections,
+          lessonsLearned,
+          tomorrowPlan,
+        })
+        const res = await trackerApi.upsertJournalEntry(targetDate, payload)
+        setEntry(res.entry)
+        setSaveStatus('saved')
+        isDirtyRef.current = false
+      } catch (err) {
+        if (!isSilent) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save journal entry.')
+        }
+        setSaveStatus('dirty')
+      } finally {
+        if (!isSilent) setSaving(false)
+      }
+    },
+    [content, mood, gratitude, reflections, lessonsLearned, tomorrowPlan, saving]
+  )
+
+  // Debounced Autosave (1500ms after user stops typing)
+  useEffect(() => {
+    if (!isDirtyRef.current || loading) return
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
     }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      void performSave(selectedDate, true)
+    }, 1500)
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+      }
+    }
+  }, [content, mood, gratitude, reflections, lessonsLearned, tomorrowPlan, selectedDate, loading, performSave])
+
+  const handleNavigateDate = async (newDate: string) => {
+    if (newDate === selectedDate) return
+
+    // Flush any pending unsaved changes before moving
+    if (isDirtyRef.current) {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+      }
+      await performSave(selectedDate, true)
+    }
+
+    setSelectedDate(newDate)
+  }
+
+  const markDirty = () => {
+    isDirtyRef.current = true
+    setSaveStatus('dirty')
   }
 
   const handleDelete = () => {
@@ -130,8 +189,11 @@ export function JournalScreen() {
               setContent('')
               setMood(null)
               setGratitude('')
+              setReflections('')
+              setLessonsLearned('')
               setTomorrowPlan('')
               setSaveStatus(null)
+              isDirtyRef.current = false
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete entry.')
             }
@@ -141,7 +203,8 @@ export function JournalScreen() {
     )
   }
 
-  const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0
+  const contentWords = countWords(content)
+  const contentChars = countChars(content)
 
   return (
     <Screen>
@@ -152,7 +215,7 @@ export function JournalScreen() {
         {/* Date Navigator */}
         <View style={styles.dateBar}>
           <TouchableOpacity
-            onPress={() => setSelectedDate(addDays(selectedDate, -1))}
+            onPress={() => void handleNavigateDate(addDays(selectedDate, -1))}
             style={styles.navBtn}
             accessibilityRole="button"
             accessibilityLabel="Previous day"
@@ -168,7 +231,7 @@ export function JournalScreen() {
               </View>
             ) : (
               <TouchableOpacity
-                onPress={() => setSelectedDate(todayYmd())}
+                onPress={() => void handleNavigateDate(todayYmd())}
                 style={styles.jumpTodayBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Jump to today"
@@ -179,7 +242,7 @@ export function JournalScreen() {
           </View>
 
           <TouchableOpacity
-            onPress={() => setSelectedDate(addDays(selectedDate, 1))}
+            onPress={() => void handleNavigateDate(addDays(selectedDate, 1))}
             style={styles.navBtn}
             accessibilityRole="button"
             accessibilityLabel="Next day"
@@ -197,16 +260,23 @@ export function JournalScreen() {
           >
             {/* Mood Selector Card */}
             <Card style={styles.moodCard}>
-              <Text style={styles.sectionHeading}>Daily Mood</Text>
+              <View style={styles.moodHeaderRow}>
+                <Text style={styles.sectionHeading}>Daily Mood</Text>
+                {mood ? (
+                  <Text style={styles.activeMoodText}>
+                    {getMoodDetails(mood)?.label} {getMoodDetails(mood)?.emoji}
+                  </Text>
+                ) : null}
+              </View>
               <View style={styles.moodRow}>
-                {MOODS.map((m) => {
+                {JOURNAL_MOODS.map((m) => {
                   const isSelected = mood === m.value
                   return (
                     <TouchableOpacity
                       key={m.value}
                       onPress={() => {
                         setMood(isSelected ? null : m.value)
-                        setSaveStatus('dirty')
+                        markDirty()
                       }}
                       style={[
                         styles.moodChip,
@@ -231,74 +301,46 @@ export function JournalScreen() {
             </Card>
 
             {/* Section Switcher Tabs */}
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                onPress={() => setActiveTab('entry')}
-                style={[styles.sectionTab, activeTab === 'entry' && styles.sectionTabActive]}
-                accessibilityRole="button"
-              >
-                <Text
-                  style={[
-                    styles.sectionTabText,
-                    activeTab === 'entry' && styles.sectionTabTextActive,
-                  ]}
-                >
-                  Entry
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setActiveTab('gratitude')}
-                style={[styles.sectionTab, activeTab === 'gratitude' && styles.sectionTabActive]}
-                accessibilityRole="button"
-              >
-                <Text
-                  style={[
-                    styles.sectionTabText,
-                    activeTab === 'gratitude' && styles.sectionTabTextActive,
-                  ]}
-                >
-                  Gratitude
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setActiveTab('plan')}
-                style={[styles.sectionTab, activeTab === 'plan' && styles.sectionTabActive]}
-                accessibilityRole="button"
-              >
-                <Text
-                  style={[
-                    styles.sectionTabText,
-                    activeTab === 'plan' && styles.sectionTabTextActive,
-                  ]}
-                >
-                  {"Tomorrow's Plan"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setActiveTab('history')}
-                style={[styles.sectionTab, activeTab === 'history' && styles.sectionTabActive]}
-                accessibilityRole="button"
-              >
-                <Text
-                  style={[
-                    styles.sectionTabText,
-                    activeTab === 'history' && styles.sectionTabTextActive,
-                  ]}
-                >
-                  History
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollRow}>
+              {(
+                [
+                  { key: 'entry', label: 'Entry' },
+                  { key: 'gratitude', label: 'Gratitude' },
+                  { key: 'reflections', label: 'Reflections' },
+                  { key: 'lessons', label: 'Lessons' },
+                  { key: 'plan', label: "Tomorrow's Plan" },
+                  { key: 'history', label: 'History' },
+                ] as const
+              ).map((tab) => {
+                const isActive = activeTab === tab.key
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    onPress={() => setActiveTab(tab.key)}
+                    style={[styles.sectionTab, isActive && styles.sectionTabActive]}
+                    accessibilityRole="button"
+                  >
+                    <Text
+                      style={[
+                        styles.sectionTabText,
+                        isActive && styles.sectionTabTextActive,
+                      ]}
+                    >
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </ScrollView>
 
             {/* Input Card depending on active tab */}
             {activeTab === 'entry' && (
               <Card style={styles.editorCard}>
                 <View style={styles.editorMetaRow}>
                   <Text style={styles.editorHint}>Write your thoughts, events, and lessons...</Text>
-                  <Text style={styles.wordCount}>{wordCount} words</Text>
+                  <Text style={styles.wordCount}>
+                    {contentWords} {contentWords === 1 ? 'word' : 'words'} • {contentChars} chars
+                  </Text>
                 </View>
                 <TextInput
                   multiline
@@ -307,7 +349,7 @@ export function JournalScreen() {
                   value={content}
                   onChangeText={(txt) => {
                     setContent(txt)
-                    setSaveStatus('dirty')
+                    markDirty()
                   }}
                   style={styles.textArea}
                   textAlignVertical="top"
@@ -317,7 +359,10 @@ export function JournalScreen() {
 
             {activeTab === 'gratitude' && (
               <Card style={styles.editorCard}>
-                <Text style={styles.editorHint}>3 things you are grateful for today:</Text>
+                <View style={styles.editorMetaRow}>
+                  <Text style={styles.editorHint}>3 things you are grateful for today:</Text>
+                  <Text style={styles.wordCount}>{countWords(gratitude)} words</Text>
+                </View>
                 <TextInput
                   multiline
                   placeholder="1. ...&#10;2. ...&#10;3. ..."
@@ -325,7 +370,49 @@ export function JournalScreen() {
                   value={gratitude}
                   onChangeText={(txt) => {
                     setGratitude(txt)
-                    setSaveStatus('dirty')
+                    markDirty()
+                  }}
+                  style={styles.textAreaShort}
+                  textAlignVertical="top"
+                />
+              </Card>
+            )}
+
+            {activeTab === 'reflections' && (
+              <Card style={styles.editorCard}>
+                <View style={styles.editorMetaRow}>
+                  <Text style={styles.editorHint}>Deep reflections & mindful thoughts:</Text>
+                  <Text style={styles.wordCount}>{countWords(reflections)} words</Text>
+                </View>
+                <TextInput
+                  multiline
+                  placeholder="What went well today? What patterns did you notice?"
+                  placeholderTextColor={colors.textMuted}
+                  value={reflections}
+                  onChangeText={(txt) => {
+                    setReflections(txt)
+                    markDirty()
+                  }}
+                  style={styles.textAreaShort}
+                  textAlignVertical="top"
+                />
+              </Card>
+            )}
+
+            {activeTab === 'lessons' && (
+              <Card style={styles.editorCard}>
+                <View style={styles.editorMetaRow}>
+                  <Text style={styles.editorHint}>Key lessons learned today:</Text>
+                  <Text style={styles.wordCount}>{countWords(lessonsLearned)} words</Text>
+                </View>
+                <TextInput
+                  multiline
+                  placeholder="What would you do differently next time?"
+                  placeholderTextColor={colors.textMuted}
+                  value={lessonsLearned}
+                  onChangeText={(txt) => {
+                    setLessonsLearned(txt)
+                    markDirty()
                   }}
                   style={styles.textAreaShort}
                   textAlignVertical="top"
@@ -335,7 +422,10 @@ export function JournalScreen() {
 
             {activeTab === 'plan' && (
               <Card style={styles.editorCard}>
-                <Text style={styles.editorHint}>Top priorities for tomorrow:</Text>
+                <View style={styles.editorMetaRow}>
+                  <Text style={styles.editorHint}>Top priorities for tomorrow:</Text>
+                  <Text style={styles.wordCount}>{countWords(tomorrowPlan)} words</Text>
+                </View>
                 <TextInput
                   multiline
                   placeholder="What must get done tomorrow?"
@@ -343,7 +433,7 @@ export function JournalScreen() {
                   value={tomorrowPlan}
                   onChangeText={(txt) => {
                     setTomorrowPlan(txt)
-                    setSaveStatus('dirty')
+                    markDirty()
                   }}
                   style={styles.textAreaShort}
                   textAlignVertical="top"
@@ -361,7 +451,7 @@ export function JournalScreen() {
                       <TouchableOpacity
                         key={d.dateStr}
                         onPress={() => {
-                          setSelectedDate(d.dateStr)
+                          void handleNavigateDate(d.dateStr)
                           setActiveTab('entry')
                         }}
                         style={[
@@ -423,7 +513,7 @@ export function JournalScreen() {
                   <Button
                     label={saving ? 'Saving...' : 'Save Journal'}
                     size="sm"
-                    onPress={handleSave}
+                    onPress={() => void performSave(selectedDate, false)}
                     disabled={saving}
                     accessibilityLabel="Save journal entry"
                   />
@@ -493,6 +583,16 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.xs,
   },
+  moodHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeMoodText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.coral,
+  },
   sectionHeading: {
     color: colors.text,
     fontSize: typography.sm.fontSize,
@@ -523,14 +623,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
   },
-  tabRow: {
+  tabScrollRow: {
     flexDirection: 'row',
     gap: spacing.xs,
+    paddingVertical: 2,
   },
   sectionTab: {
-    flex: 1,
     paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
