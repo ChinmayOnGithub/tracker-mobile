@@ -9,6 +9,7 @@ interface LogRow {
   note: string | null
   amount: number | null
   payload_json: string | null
+  version: number
   created_at: string
   updated_at: string
 }
@@ -22,6 +23,7 @@ function rowToLog(r: LogRow): ActivityLog {
     note: r.note,
     amount: r.amount,
     payload: r.payload_json ? (JSON.parse(r.payload_json) as unknown) : undefined,
+    version: r.version ?? 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -87,10 +89,21 @@ export class LogRepository {
 
     await this.db.withTransactionAsync(async () => {
       for (const log of logs) {
+        const existing = await this.db.getFirstAsync<{ version: number }>(
+          'SELECT version FROM activity_log WHERE id = ?;',
+          [log.id]
+        )
+        const incomingVersion = log.version ?? 1
+
+        // Never let an older sync response overwrite newer local state.
+        if (existing && incomingVersion <= (existing.version ?? 0)) {
+          continue
+        }
+
         await this.db.runAsync(
           `INSERT INTO activity_log (
-            id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, activity_id, date, status, note, amount, payload_json, version, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             activity_id = excluded.activity_id,
             date = excluded.date,
@@ -98,6 +111,7 @@ export class LogRepository {
             note = excluded.note,
             amount = excluded.amount,
             payload_json = excluded.payload_json,
+            version = excluded.version,
             created_at = excluded.created_at,
             updated_at = excluded.updated_at,
             deleted_at = NULL;`,
@@ -109,6 +123,7 @@ export class LogRepository {
             log.note ?? null,
             log.amount ?? null,
             log.payload ? JSON.stringify(log.payload) : null,
+            incomingVersion,
             log.createdAt,
             log.updatedAt,
           ]
@@ -146,8 +161,8 @@ export class LogRepository {
     await this.db.withTransactionAsync(async () => {
       await this.db.runAsync(
         `INSERT OR REPLACE INTO activity_log (
-          id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          id, activity_id, date, status, note, amount, payload_json, version, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           log.id,
           log.activityId,
@@ -156,6 +171,7 @@ export class LogRepository {
           log.note ?? null,
           log.amount ?? null,
           log.payload ? JSON.stringify(log.payload) : null,
+          log.version ?? 1,
           log.createdAt,
           log.updatedAt,
         ]
