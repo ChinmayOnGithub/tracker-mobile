@@ -36,11 +36,7 @@ import { TodayTaskRow } from './components/TodayTaskRow'
 import { TaskActionModal } from './components/TaskActionModal'
 import { QuickTaskAddBar } from './components/QuickTaskAddBar'
 import { CalendarEventsSection } from './components/CalendarEventsSection'
-import { WorkSessionCard } from './WorkSessionCard'
-import { WeightWidgetCard } from './WeightWidgetCard'
-import { JournalWidgetCard } from './JournalWidgetCard'
-import { DailyCodingCard } from './DailyCodingCard'
-import { LeaveWidgetCard } from './LeaveWidgetCard'
+import { TODAY_WIDGETS } from './todayWidgetRegistry'
 import { MobileCompletionService } from '@/domain/completion'
 import { appEvents } from '@/utils/events'
 import { fastCache } from '@/utils/dataCache'
@@ -697,9 +693,6 @@ export function TodayScreen() {
 
       {error ? <ErrorView message={error} /> : null}
 
-      {/* Google Calendar Events Section */}
-      <CalendarEventsSection events={calendarEvents} />
-
       {/* Primary Section: TASKS */}
       <View style={styles.taskSection}>
         <View style={styles.sectionHeader}>
@@ -759,13 +752,14 @@ export function TodayScreen() {
         />
       </View>
 
-      {/* Secondary Dashboard Widgets */}
+      {/* Dashboard Widgets */}
       <View style={styles.widgetsSection}>
-        <WorkSessionCard date={selectedDate} />
-        <LeaveWidgetCard selectedDate={selectedDate} onLeaveChanged={() => void load()} />
-        <JournalWidgetCard date={selectedDate} />
-        <DailyCodingCard date={selectedDate} />
-        <WeightWidgetCard date={selectedDate} />
+        {TODAY_WIDGETS.map((widget) => (
+          <View key={widget.id} accessible accessibilityLabel={widget.title}>
+            {widget.render({ date: selectedDate, onChanged: () => void load() })}
+          </View>
+        ))}
+        <CalendarEventsSection events={calendarEvents} />
       </View>
 
       {/* Task Context Action Modal */}
