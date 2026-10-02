@@ -99,6 +99,15 @@ export class TemplateRepository {
           "DELETE FROM tombstones WHERE entity_type = 'activity_template' AND entity_id = ?;",
           [t.id]
         )
+
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['activity_template', t.id]
+        )
+        await this.db.runAsync(
+          'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+          ['activity_template', t.id, t.name, [t.category, t.type, t.recurrenceType].filter(Boolean).join(' '), t.updatedAt]
+        )
       }
     })
   }
@@ -118,6 +127,10 @@ export class TemplateRepository {
         `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at)
          VALUES ('activity_template', ?, ?);`,
         [id, now]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['activity_template', id]
       )
     })
   }
