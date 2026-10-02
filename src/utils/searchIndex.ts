@@ -1,12 +1,13 @@
 import type { JournalEntry, NoteItem } from '@/api/client'
 import type { SQLiteDatabase } from 'expo-sqlite'
 import { SearchRepository, type SearchDocument } from '@/db/repository'
+
 function stripHtml(html: string): string {
   return html
-    .replace(/<\\/(p|div|li|h[1-6]|tr)>/gi, ' ')
-    .replace(/<br\\s*\\/?>/gi, ' ')
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]*>/g, '')
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
@@ -41,16 +42,14 @@ export async function indexNotes(
   db: SQLiteDatabase,
   notes: NoteItem[],
 ): Promise<void> {
-  const repository = new SearchRepository(db)
-  await repository.upsertMany(notes.map(noteDocument))
+  await new SearchRepository(db).upsertMany(notes.map(noteDocument))
 }
 
 export async function indexNote(
   db: SQLiteDatabase,
   note: NoteItem,
 ): Promise<void> {
-  const repository = new SearchRepository(db)
-  await repository.upsert(noteDocument(note))
+  await new SearchRepository(db).upsert(noteDocument(note))
 }
 
 export async function removeNoteFromSearch(
