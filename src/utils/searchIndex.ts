@@ -1,7 +1,14 @@
 import type { JournalEntry, NoteItem } from '@/api/client'
 import type { SQLiteDatabase } from 'expo-sqlite'
 import { SearchRepository, type SearchDocument } from '@/db/repository'
-import { stripHtml } from '@/features/notes/notes-presentation'
+function stripHtml(html: string): string {
+  return html
+    .replace(/<\\/(p|div|li|h[1-6]|tr)>/gi, ' ')
+    .replace(/<br\\s*\\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\\s+/g, ' ')
+    .trim()
+}
 
 function noteDocument(note: NoteItem): SearchDocument {
   return {
