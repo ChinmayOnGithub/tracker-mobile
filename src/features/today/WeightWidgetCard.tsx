@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { StyleSheet, Text, View, Modal, Pressable } from 'react-native'
+import { StyleSheet, Text, View, Modal, Pressable, TouchableOpacity } from 'react-native'
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
@@ -15,6 +15,7 @@ interface WeightWidgetCardProps {
 export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps) {
   const [records, setRecords] = useState<WeightRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [weightInput, setWeightInput] = useState('')
   const [notesInput, setNotesInput] = useState('')
@@ -52,6 +53,14 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
   }, [])
 
   const latestRecord = records[records.length - 1] || null
+  const firstRecord = records.length > 1 ? records[0] : null
+  const netChange = latestRecord && firstRecord ? Number((latestRecord.weight - firstRecord.weight).toFixed(1)) : null
+
+  const handleAdjustWeight = (delta: number) => {
+    const current = parseFloat(weightInput.trim()) || latestRecord?.weight || 70.0
+    const updated = Math.max(20, Math.min(500, Number((current + delta).toFixed(1))))
+    setWeightInput(String(updated))
+  }
 
   const handleSave = async () => {
     setError(null)
@@ -87,19 +96,60 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
           <View style={styles.titleGroup}>
             <TrackerIcon name="weight" size="sm" color={colors.primary} />
             <Text style={styles.title}>Weight</Text>
+            {netChange !== null && (
+              <View
+                style={[
+                  styles.trendBadge,
+                  {
+                    backgroundColor:
+                      netChange < 0
+                        ? 'rgba(16, 185, 129, 0.15)'
+                        : netChange > 0
+                        ? 'rgba(255, 117, 87, 0.15)'
+                        : colors.surfaceRaised,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.trendText,
+                    {
+                      color:
+                        netChange < 0
+                          ? colors.emerald
+                          : netChange > 0
+                          ? colors.coral
+                          : colors.textMuted,
+                    },
+                  ]}
+                >
+                  {netChange > 0 ? `+${netChange}` : `${netChange}`} kg
+                </Text>
+              </View>
+            )}
           </View>
 
-          <Button
-            label={latestRecord ? 'Update' : 'Log'}
-            onPress={() => {
-              if (latestRecord) {
-                setWeightInput(String(latestRecord.weight))
-              }
-              setModalOpen(true)
-            }}
-            size="sm"
-            variant="outline"
-          />
+          <View style={styles.headerActions}>
+            {records.length > 0 && (
+              <Button
+                label={showHistory ? 'Hide' : 'History'}
+                onPress={() => setShowHistory((prev) => !prev)}
+                size="sm"
+                variant="ghost"
+              />
+            )}
+            <Button
+              label={latestRecord ? 'Update' : 'Log'}
+              onPress={() => {
+                if (latestRecord) {
+                  setWeightInput(String(latestRecord.weight))
+                }
+                setModalOpen(true)
+              }}
+              size="sm"
+              variant="outline"
+            />
+          </View>
         </View>
 
         <View style={styles.contentRow}>
@@ -111,15 +161,43 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
               </View>
               <Text style={styles.dateLabel}>
                 Logged on {String(latestRecord.date).slice(0, 10)}
+                {latestRecord.notes ? ` • ${latestRecord.notes}` : ''}
               </Text>
             </View>
           ) : (
             <Text style={styles.emptyText}>No weight logged this week</Text>
           )}
         </View>
+
+        {/* 7-Day History List */}
+        {showHistory && records.length > 0 && (
+          <View style={styles.historySection}>
+            <Text style={styles.historyHeading}>Recent 7-Day Entries</Text>
+            <View style={styles.historyList}>
+              {records
+                .slice()
+                .reverse()
+                .map((rec, idx) => (
+                  <View key={rec.id || idx} style={styles.historyRow}>
+                    <Text style={styles.historyDate}>
+                      {String(rec.date).slice(0, 10)}
+                    </Text>
+                    <View style={styles.historyRight}>
+                      {rec.notes ? (
+                        <Text numberOfLines={1} style={styles.historyNotes}>
+                          {rec.notes}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.historyWeight}>{rec.weight} kg</Text>
+                    </View>
+                  </View>
+                ))}
+            </View>
+          </View>
+        )}
       </Card>
 
-      {/* Quick Entry Modal */}
+      {/* Quick Entry Modal with Quick-Adjust Steps */}
       <Modal
         animationType="slide"
         onRequestClose={() => setModalOpen(false)}
@@ -147,10 +225,39 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
                 placeholder="e.g. 72.5"
                 value={weightInput}
               />
+
+              {/* Quick Stepper Buttons matching Web WeightPanel */}
+              <View style={styles.steppersRow}>
+                <TouchableOpacity
+                  onPress={() => handleAdjustWeight(-1.0)}
+                  style={styles.stepBtn}
+                >
+                  <Text style={styles.stepBtnText}>-1.0</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleAdjustWeight(-0.1)}
+                  style={styles.stepBtn}
+                >
+                  <Text style={styles.stepBtnText}>-0.1</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleAdjustWeight(0.1)}
+                  style={styles.stepBtn}
+                >
+                  <Text style={styles.stepBtnText}>+0.1</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleAdjustWeight(1.0)}
+                  style={styles.stepBtn}
+                >
+                  <Text style={styles.stepBtnText}>+1.0</Text>
+                </TouchableOpacity>
+              </View>
+
               <Input
                 label="Notes (optional)"
                 onChangeText={setNotesInput}
-                placeholder="e.g. Post-workout"
+                placeholder="e.g. Morning fasted"
                 value={notesInput}
               />
 
@@ -188,11 +295,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs + 2,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   title: {
     fontSize: typography.sm.fontSize,
     lineHeight: typography.sm.lineHeight,
     fontWeight: '700',
     color: colors.text,
+  },
+  trendBadge: {
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: radius.full,
+  },
+  trendText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   contentRow: {
     paddingVertical: spacing.xs,
@@ -223,6 +344,51 @@ const styles = StyleSheet.create({
     fontSize: typography.sm.fontSize,
     color: colors.textMuted,
   },
+  historySection: {
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
+    gap: spacing.xs,
+  },
+  historyHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  historyList: {
+    gap: spacing.xs,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.sm,
+  },
+  historyDate: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+  historyRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  historyNotes: {
+    fontSize: 11,
+    color: colors.textSubtle,
+    maxWidth: 120,
+  },
+  historyWeight: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -247,6 +413,26 @@ const styles = StyleSheet.create({
   },
   modalForm: {
     gap: spacing.md,
+  },
+  steppersRow: {
+    flexDirection: 'row',
+    gap: spacing.xs + 2,
+    justifyContent: 'space-between',
+  },
+  stepBtn: {
+    flex: 1,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
   modalError: {
     color: colors.danger,
