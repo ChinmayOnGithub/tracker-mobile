@@ -13,7 +13,8 @@ import {
   type LeaveType,
 } from '@/api/client'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
+import { radius, spacing, typography } from '@/theme/tokens'
 import { LeaveModal } from '@/features/leave/LeaveModal'
 
 interface LeaveWidgetCardProps {
@@ -21,16 +22,23 @@ interface LeaveWidgetCardProps {
   onLeaveChanged?: () => void
 }
 
-const LEAVE_TYPES_CONFIG: { key: LeaveType; label: string; color: string }[] = [
-  { key: 'CASUAL', label: 'Casual', color: '#38bdf8' },
-  { key: 'SICK', label: 'Sick', color: '#f87171' },
-  { key: 'PTO', label: 'PTO', color: '#a78bfa' },
-  { key: 'COMP_OFF', label: 'Comp', color: '#fbbf24' },
-  { key: 'HALF_DAY', label: 'Half', color: '#38bdf8' },
-  { key: 'WFH', label: 'WFH', color: '#34d399' },
+interface LeaveTypeConfig {
+  key: LeaveType
+  label: string
+  colorKey: 'sky' | 'rose' | 'purple' | 'warning' | 'sky' | 'success'
+}
+
+const LEAVE_TYPES_CONFIG: LeaveTypeConfig[] = [
+  { key: 'CASUAL', label: 'Casual', colorKey: 'sky' },
+  { key: 'SICK', label: 'Sick', colorKey: 'rose' },
+  { key: 'PTO', label: 'PTO', colorKey: 'purple' },
+  { key: 'COMP_OFF', label: 'Comp', colorKey: 'warning' },
+  { key: 'HALF_DAY', label: 'Half', colorKey: 'sky' },
+  { key: 'WFH', label: 'WFH', colorKey: 'success' },
 ]
 
 export function LeaveWidgetCard({ selectedDate, onLeaveChanged }: LeaveWidgetCardProps) {
+  const { colors } = useTheme()
   const currentYear = new Date().getFullYear()
   const [allowances, setAllowances] = useState<LeaveAllowance[]>([])
   const [records, setRecords] = useState<LeaveRecord[]>([])
@@ -80,6 +88,8 @@ export function LeaveWidgetCard({ selectedDate, onLeaveChanged }: LeaveWidgetCar
     onLeaveChanged?.()
   }
 
+  const styles = React.useMemo(() => createStyles(colors), [colors])
+
   return (
     <>
       <Pressable onPress={() => setModalVisible(true)} style={styles.card}>
@@ -117,10 +127,11 @@ export function LeaveWidgetCard({ selectedDate, onLeaveChanged }: LeaveWidgetCar
               const allowance = allowances.find((a) => a.leaveType === t.key)?.allowance ?? 0
               const used = usedByType[t.key] ?? 0
               const remaining = Math.max(0, allowance - used)
+              const typeColor = colors[t.colorKey]
 
               return (
                 <View key={t.key} style={styles.chip}>
-                  <View style={[styles.dot, { backgroundColor: t.color }]} />
+                  <View style={[styles.dot, { backgroundColor: typeColor }]} />
                   <Text style={styles.chipNumber}>
                     {remaining}/{allowance}
                   </Text>
@@ -154,7 +165,7 @@ export function LeaveWidgetCard({ selectedDate, onLeaveChanged }: LeaveWidgetCar
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -192,12 +203,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: 'rgba(235, 94, 40, 0.12)',
+    backgroundColor: colors.coralSubtle,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: 'rgba(235, 94, 40, 0.25)',
+    borderColor: colors.coral,
+    opacity: 0.8,
   },
   activeBannerText: {
     fontSize: typography.xs.fontSize,

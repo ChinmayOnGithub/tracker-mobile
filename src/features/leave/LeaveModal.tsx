@@ -18,7 +18,8 @@ import {
   type LeaveType,
 } from '@/api/client'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
+import { radius, spacing, typography } from '@/theme/tokens'
 import { addDays, todayYmd } from '@/utils/date'
 
 interface LeaveModalProps {
@@ -29,13 +30,19 @@ interface LeaveModalProps {
 
 type TabKey = 'allowances' | 'request' | 'history'
 
-const LEAVE_TYPES: { key: LeaveType; label: string; color: string }[] = [
-  { key: 'CASUAL', label: 'Casual', color: '#38bdf8' },
-  { key: 'SICK', label: 'Sick', color: '#f87171' },
-  { key: 'PTO', label: 'Paid Leave', color: '#a78bfa' },
-  { key: 'COMP_OFF', label: 'Comp Off', color: '#fbbf24' },
-  { key: 'HALF_DAY', label: 'Half Day', color: '#38bdf8' },
-  { key: 'WFH', label: 'Remote / WFH', color: '#34d399' },
+interface LeaveTypeConfig {
+  key: LeaveType
+  label: string
+  colorKey: 'sky' | 'rose' | 'purple' | 'warning' | 'success'
+}
+
+const LEAVE_TYPES: LeaveTypeConfig[] = [
+  { key: 'CASUAL', label: 'Casual', colorKey: 'sky' },
+  { key: 'SICK', label: 'Sick', colorKey: 'rose' },
+  { key: 'PTO', label: 'Paid Leave', colorKey: 'purple' },
+  { key: 'COMP_OFF', label: 'Comp Off', colorKey: 'warning' },
+  { key: 'HALF_DAY', label: 'Half Day', colorKey: 'sky' },
+  { key: 'WFH', label: 'Remote / WFH', colorKey: 'success' },
 ]
 
 function calcDays(startStr: string, endStr: string): number {
@@ -49,6 +56,7 @@ function calcDays(startStr: string, endStr: string): number {
 }
 
 export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps) {
+  const { colors } = useTheme()
   const today = todayYmd()
   const currentYear = new Date().getFullYear()
 
@@ -203,6 +211,8 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
     usedByType[r.leaveType] = (usedByType[r.leaveType] ?? 0) + r.totalDays
   })
 
+  const styles = React.useMemo(() => createStyles(colors), [colors])
+
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
       <Pressable onPress={onClose} style={styles.overlay}>
@@ -259,17 +269,18 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
                     Track your annual entitlements. Use steppers to configure allowance balances.
                   </Text>
                   <View style={styles.allowanceGrid}>
-                    {LEAVE_TYPES.map(({ key, label, color }) => {
+                    {LEAVE_TYPES.map(({ key, label, colorKey }) => {
                       const allowance = allowances.find((a) => a.leaveType === key)?.allowance ?? 0
                       const used = usedByType[key] ?? 0
                       const remaining = Math.max(0, allowance - used)
                       const pct = allowance > 0 ? Math.min(100, Math.round((used / allowance) * 100)) : 0
+                      const typeColor = colors[colorKey]
 
                       return (
                         <View key={key} style={styles.allowanceCard}>
                           <View style={styles.cardHeaderRow}>
                             <View style={styles.typeTag}>
-                              <View style={[styles.colorDot, { backgroundColor: color }]} />
+                              <View style={[styles.colorDot, { backgroundColor: typeColor }]} />
                               <Text style={styles.cardTypeTitle}>{label}</Text>
                             </View>
                             <View style={styles.stepperRow}>
@@ -307,7 +318,7 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
                                 styles.progressFill,
                                 {
                                   width: `${pct}%`,
-                                  backgroundColor: color,
+                                  backgroundColor: typeColor,
                                   opacity: 0.75,
                                 },
                               ]}
@@ -446,6 +457,7 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
                   ) : (
                     records.map((r) => {
                       const typeMeta = LEAVE_TYPES.find((t) => t.key === r.leaveType)
+                      const typeColor = typeMeta ? colors[typeMeta.colorKey] : colors.primary
                       const isApproved = r.status === 'APPROVED'
                       const isPending = r.status === 'PENDING'
 
@@ -456,7 +468,7 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
                               <View
                                 style={[
                                   styles.colorDot,
-                                  { backgroundColor: typeMeta?.color || colors.primary },
+                                  { backgroundColor: typeColor },
                                 ]}
                               />
                               <Text style={styles.historyTypeName}>{typeMeta?.label || r.leaveType}</Text>
@@ -526,7 +538,7 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -602,7 +614,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: colors.successSubtle,
     borderRadius: radius.sm,
     borderColor: colors.success,
     borderWidth: 1,
@@ -737,7 +749,7 @@ const styles = StyleSheet.create({
   },
   typePillActive: {
     borderColor: colors.coral,
-    backgroundColor: 'rgba(235, 94, 40, 0.12)',
+    backgroundColor: colors.coralSubtle,
   },
   typePillText: {
     fontSize: typography.xs.fontSize,
@@ -874,13 +886,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   statusApproved: {
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    backgroundColor: colors.successSubtle,
   },
   statusPending: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: colors.warningSubtle,
   },
   statusRejected: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: colors.dangerSubtle,
   },
   statusText: {
     fontSize: 10,
@@ -932,6 +944,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   deleteBtnText: {
+    fontSize: typography.xs.fontSize,
+    color: colors.danger,
+    fontWeight: '600',
+  },
+})
     fontSize: typography.xs.fontSize,
     color: colors.danger,
     fontWeight: '600',

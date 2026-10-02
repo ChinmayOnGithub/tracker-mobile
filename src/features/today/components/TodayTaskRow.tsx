@@ -10,7 +10,7 @@ import type { TaskOccurrence } from '@/domain/timeline'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { ActivitySymbolBadge } from '@/features/activities/components/ActivitySymbolBadge'
 import { useTheme } from '@/theme/ThemeContext'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
 
 interface TodayTaskRowProps {
   task: TaskOccurrence
@@ -29,6 +29,8 @@ export function TodayTaskRow({
   const isDone = task.isCompleted
   const isCanceled = task.isCanceled
   const isPostponed = task.isPostponed
+
+  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   return (
     <View style={[styles.container, (isDone || isCanceled || isPostponed) && styles.containerFaded]}>
@@ -146,7 +148,7 @@ export function TodayTaskRow({
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -217,8 +219,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 1,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    borderColor: 'rgba(34, 197, 94, 0.3)',
+    backgroundColor: colors.successSubtle,
+    borderColor: colors.success,
+    opacity: 0.8,
     borderWidth: 1,
   },
   completionBadgeText: {
