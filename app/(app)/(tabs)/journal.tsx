@@ -1,5 +1,10 @@
 import { JournalScreen } from '@/features/journal/JournalScreen'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function JournalRoute() {
-  return <JournalScreen />
+  return (
+    <ErrorBoundary fallbackTitle="Journal Error">
+      <JournalScreen />
+    </ErrorBoundary>
+  )
 }
