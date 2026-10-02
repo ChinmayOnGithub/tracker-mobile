@@ -3,6 +3,7 @@ import { trackerApi } from '@/api/client'
 import { TemplateRepository, LogRepository } from '@/db/repository'
 import { fastCache } from './dataCache'
 import { todayYmd } from './date'
+import { indexNotes } from './searchIndex'
 
 let isPrefetching = false
 
@@ -49,7 +50,7 @@ async function prefetchCalendar(month: string): Promise<void> {
   }
 }
 
-async function prefetchSecondary(year: number): Promise<void> {
+async function prefetchSecondary(db: SQLiteDatabase, year: number): Promise<void> {
   await later(LOW_PRIORITY_DELAY_MS)
 
   await Promise.allSettled([
@@ -57,7 +58,10 @@ async function prefetchSecondary(year: number): Promise<void> {
       if (fastCache.isFresh('notes', CACHE_TTL_MS)) return
       try {
         const response = await trackerApi.getNotes()
-        if (response.notes) fastCache.set('notes', response.notes, CACHE_TTL_MS)
+        if (response.notes) {
+          fastCache.set('notes', response.notes, CACHE_TTL_MS)
+          await indexNotes(db, response.notes)
+        }
       } catch {
         // Prefetch is opportunistic.
       }
@@ -109,7 +113,7 @@ export async function prefetchAppData(db: SQLiteDatabase): Promise<void> {
       prefetchCalendar(monthStr),
     ])
 
-    await prefetchSecondary(currentYear)
+    await prefetchSecondary(db, currentYear)
   } finally {
     // Keep the guard held until every scheduled request finishes so a second
     // mount cannot create another overlapping prefetch burst.
