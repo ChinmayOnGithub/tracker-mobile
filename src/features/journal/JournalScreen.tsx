@@ -18,7 +18,8 @@ import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 import {
   JOURNAL_MOODS,
   countChars,
@@ -29,6 +30,7 @@ import {
 } from './journal-presentation'
 
 export function JournalScreen() {
+  const { colors } = useTheme()
   const [selectedDate, setSelectedDate] = useState(todayYmd())
   const [entry, setEntry] = useState<JournalEntry | null>(null)
   const [loading, setLoading] = useState(true)
@@ -205,6 +207,8 @@ export function JournalScreen() {
 
   const contentWords = countWords(content)
   const contentChars = countChars(content)
+
+  const styles = useMemo(() => createStyles(colors), [colors])
 
   return (
     <Screen>
@@ -527,7 +531,7 @@ export function JournalScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   keyboardWrap: {
     flex: 1,
   },
@@ -727,7 +731,7 @@ const styles = StyleSheet.create({
   },
   historyRowActive: {
     borderColor: colors.coral,
-    backgroundColor: 'rgba(255, 117, 87, 0.08)',
+    backgroundColor: colors.coralSubtle,
   },
   historyRowTextCol: {
     flexDirection: 'row',

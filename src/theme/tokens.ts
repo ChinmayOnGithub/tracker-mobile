@@ -90,10 +90,15 @@ export const darkPalette = {
 
   // Preset Palette for Habits & Badges
   emerald: '#10b981',
+  emeraldSubtle: 'rgba(16, 185, 129, 0.15)',
   sky: '#38bdf8',
+  skySubtle: 'rgba(56, 189, 248, 0.15)',
   purple: '#8b5cf6',
+  purpleSubtle: 'rgba(139, 92, 246, 0.15)',
   amber: '#f59e0b',
+  amberSubtle: 'rgba(245, 158, 11, 0.15)',
   rose: '#ec4899',
+  roseSubtle: 'rgba(236, 72, 153, 0.15)',
 }
 
 export const lightPalette = {
@@ -125,10 +130,15 @@ export const lightPalette = {
 
   // Preset Palette for Habits & Badges
   emerald: '#059669',
+  emeraldSubtle: 'rgba(5, 150, 105, 0.15)',
   sky: '#0284c7',
+  skySubtle: 'rgba(2, 132, 199, 0.15)',
   purple: '#7c3aed',
+  purpleSubtle: 'rgba(124, 58, 237, 0.15)',
   amber: '#d97706',
+  amberSubtle: 'rgba(217, 119, 6, 0.15)',
   rose: '#db2777',
+  roseSubtle: 'rgba(219, 39, 119, 0.15)',
 }
 
 export type ThemeColors = typeof darkPalette

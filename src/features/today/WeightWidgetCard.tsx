@@ -5,7 +5,8 @@ import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { trackerApi, type WeightRecord } from '@/api/client'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 
 interface WeightWidgetCardProps {
   date: string
@@ -13,6 +14,7 @@ interface WeightWidgetCardProps {
 }
 
 export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps) {
+  const { colors } = useTheme()
   const [records, setRecords] = useState<WeightRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
@@ -89,6 +91,8 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
     return null
   }
 
+  const styles = React.useMemo(() => createStyles(colors), [colors])
+
   return (
     <>
       <Card style={styles.card}>
@@ -103,9 +107,9 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
                   {
                     backgroundColor:
                       netChange < 0
-                        ? 'rgba(16, 185, 129, 0.15)'
+                        ? colors.successSubtle
                         : netChange > 0
-                        ? 'rgba(255, 117, 87, 0.15)'
+                        ? colors.coralSubtle
                         : colors.surfaceRaised,
                   },
                 ]}
@@ -279,7 +283,7 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   card: {
     padding: spacing.md,
     gap: spacing.sm,

@@ -10,7 +10,8 @@ import {
 import type { TaskOccurrence } from '@/domain/timeline'
 import { MobileCompletionService } from '@/domain/completion'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 
 interface TaskActionModalProps {
   task: TaskOccurrence | null
@@ -33,6 +34,7 @@ export function TaskActionModal({
   onDeleteLog,
   onRePostpone,
 }: TaskActionModalProps) {
+  const { colors } = useTheme()
   if (!task) return null
 
   const isDone = task.isCompleted
@@ -205,10 +207,10 @@ export function TaskActionModal({
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   sheet: {

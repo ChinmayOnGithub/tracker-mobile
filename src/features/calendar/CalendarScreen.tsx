@@ -22,7 +22,8 @@ import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { CalendarRepository, type LocalCalendarEvent } from '@/db/repository'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 
 type CalendarViewMode = 'month' | 'week' | 'day'
@@ -30,6 +31,7 @@ type CalendarViewMode = 'month' | 'week' | 'day'
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function CalendarScreen() {
+  const { colors } = useTheme()
   const db = useSQLiteContext()
   const calendarRepo = useMemo(() => new CalendarRepository(db), [db])
 
@@ -536,6 +538,8 @@ export function CalendarScreen() {
     timeZone: 'UTC',
   })
 
+  const styles = useMemo(() => createStyles(colors), [colors])
+
   return (
     <Screen onRefresh={() => void loadData(true)} refreshing={refreshing}>
       {/* Top Header & Sync Bar */}
@@ -638,7 +642,7 @@ export function CalendarScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     gap: spacing.sm,
     marginBottom: spacing.md,
@@ -726,7 +730,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: colors.coral,
-    backgroundColor: 'rgba(255, 117, 87, 0.12)',
+    backgroundColor: colors.coralSubtle,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 2,
     borderRadius: radius.sm,
@@ -790,7 +794,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   gridCellToday: {
-    backgroundColor: 'rgba(255, 117, 87, 0.08)',
+    backgroundColor: colors.coralSubtle,
   },
   cellDayText: {
     fontSize: typography.sm.fontSize,
@@ -1043,7 +1047,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   gCalBadge: {
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    backgroundColor: colors.primarySubtle,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 1,
     borderRadius: radius.sm,

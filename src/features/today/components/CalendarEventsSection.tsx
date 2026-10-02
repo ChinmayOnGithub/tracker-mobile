@@ -8,13 +8,16 @@ import {
 } from 'react-native'
 import type { LocalCalendarEvent } from '@/db/repository'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 
 interface CalendarEventsSectionProps {
   events: LocalCalendarEvent[]
 }
 
 export function CalendarEventsSection({ events }: CalendarEventsSectionProps) {
+  const { colors } = useTheme()
+  
   if (events.length === 0) return null
 
   const handleOpenLink = (url?: string | null) => {
@@ -24,6 +27,8 @@ export function CalendarEventsSection({ events }: CalendarEventsSectionProps) {
       })
     }
   }
+
+  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   return (
     <View style={styles.container}>
@@ -116,7 +121,7 @@ export function CalendarEventsSection({ events }: CalendarEventsSectionProps) {
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     gap: spacing.xs + 2,
     marginBottom: spacing.md,
@@ -138,7 +143,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   badge: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    backgroundColor: colors.skySubtle,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 1,
     borderRadius: radius.full,

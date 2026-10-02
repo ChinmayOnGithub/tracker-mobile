@@ -27,7 +27,8 @@ import {
   TemplateRepository,
   type LocalCalendarEvent,
 } from '@/db/repository'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { getNextActivityStatus, type ActivityStatus } from '@/domain/activity'
 import { computeTaskOccurrences, type TaskOccurrence } from '@/domain/timeline'
@@ -52,6 +53,7 @@ function generateLocalUuid(): string {
 }
 
 export function TodayScreen() {
+  const { colors } = useTheme()
   const db = useSQLiteContext()
   const today = todayYmd()
   const [selectedDate, setSelectedDate] = useState(today)
@@ -583,6 +585,8 @@ export function TodayScreen() {
 
   const isToday = selectedDate === today
 
+  const styles = useMemo(() => createStyles(colors), [colors])
+
   return (
     <Screen onRefresh={() => void load(true)} refreshing={refreshing}>
       {/* Date Switcher Bar */}
@@ -706,7 +710,7 @@ export function TodayScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   dateBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -739,7 +743,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: colors.coral,
-    backgroundColor: 'rgba(255, 117, 87, 0.12)',
+    backgroundColor: colors.coralSubtle,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 2,
     borderRadius: radius.sm,

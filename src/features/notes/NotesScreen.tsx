@@ -19,7 +19,8 @@ import { Input } from '@/components/Input'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
 import { fmtRelativeTime } from '@/utils/date'
 import {
   countChars,
@@ -31,6 +32,7 @@ import {
 } from './notes-presentation'
 
 export function NotesScreen() {
+  const { colors } = useTheme()
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<NoteFilterType>('all')
@@ -145,6 +147,8 @@ export function NotesScreen() {
   const counts = getNoteCounts(notes)
   const formWords = countWords(formContent)
   const formChars = countChars(formContent)
+
+  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   return (
     <Screen onRefresh={() => void loadNotes(true)} refreshing={refreshing}>
@@ -355,7 +359,7 @@ export function NotesScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   header: {
     gap: spacing.xs,
   },
@@ -429,7 +433,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    backgroundColor: colors.primarySubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
