@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store'
 import { config } from '@/config'
 import { dedupeRequest } from '@/utils/requestDeduper'
+import { measureAsync } from '@/utils/performance'
 import type {
   ActivityLog,
   ActivityTemplate,
@@ -112,11 +113,13 @@ async function performFetch<T>(
           : null
 
       const doFetch = () =>
-        fetch(url, {
-          ...rest,
-          headers,
-          signal: controller.signal,
-        })
+        measureAsync(`api:${rest.method ?? 'GET'}:${path}`, () =>
+          fetch(url, {
+            ...rest,
+            headers,
+            signal: controller.signal,
+          })
+        )
 
       const response = requestKey
         ? await dedupeRequest(requestKey, doFetch)
