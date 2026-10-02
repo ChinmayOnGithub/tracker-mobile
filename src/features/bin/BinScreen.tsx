@@ -18,7 +18,7 @@ import { Screen } from '@/components/Screen'
 import { TrackerIcon, type TrackerIconName } from '@/components/TrackerIcon'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 
-const FILTER_TYPES = ['all', 'journal', 'note', 'activity_template', 'weight'] as const
+const FILTER_TYPES = ['all', 'journal', 'note', 'activity_template', 'weight', 'leave'] as const
 
 function getEntityIcon(type: BinItem['entityType']): TrackerIconName {
   switch (type) {
@@ -30,6 +30,8 @@ function getEntityIcon(type: BinItem['entityType']): TrackerIconName {
       return 'activity'
     case 'weight':
       return 'weight'
+    case 'leave':
+      return 'calendar'
     default:
       return 'trash'
   }
@@ -45,6 +47,8 @@ function getEntityColor(type: BinItem['entityType']): string {
       return colors.emerald
     case 'weight':
       return colors.purple
+    case 'leave':
+      return colors.warning
     default:
       return colors.textMuted
   }
@@ -133,7 +137,9 @@ export function BinScreen() {
               ? 'Notes'
               : t === 'journal'
               ? 'Journal'
-              : 'Weight'
+              : t === 'weight'
+              ? 'Weight'
+              : 'Time Off'
 
           return (
             <TouchableOpacity

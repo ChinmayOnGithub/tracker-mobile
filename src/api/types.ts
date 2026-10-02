@@ -139,7 +139,7 @@ export interface NoteItem {
   updatedAt?: string
 }
 
-export type BinEntityType = 'journal' | 'note' | 'activity_template' | 'weight'
+export type BinEntityType = 'journal' | 'note' | 'activity_template' | 'weight' | 'leave'
 
 export interface BinItem {
   id: string

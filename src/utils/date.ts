@@ -39,3 +39,25 @@ export function addDays(ymd: string, count: number): string {
   const day = String(date.getUTCDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
+export function fmtRelativeTime(dateInput: Date | string | undefined | null): string {
+  if (!dateInput) return ''
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput
+    if (isNaN(d.getTime())) return ''
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    if (diffMs < 0) return 'Just now'
+    const diffMins = Math.floor(diffMs / (60 * 1000))
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHours = Math.floor(diffMins / 60)
+    if (diffHours < 24) return `${diffHours}h ago`
+    const diffDays = Math.floor(diffHours / 24)
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  } catch {
+    return ''
+  }
+}

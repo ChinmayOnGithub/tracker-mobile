@@ -20,10 +20,20 @@ import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { fmtRelativeTime } from '@/utils/date'
+import {
+  countChars,
+  countWords,
+  filterNotes,
+  getNoteCounts,
+  stripHtml,
+  type NoteFilterType,
+} from './notes-presentation'
 
 export function NotesScreen() {
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState<NoteFilterType>('all')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,7 +79,7 @@ export function NotesScreen() {
   const openEditModal = (note: NoteItem) => {
     setEditingNote(note)
     setFormTitle(note.title || '')
-    setFormContent(note.content || '')
+    setFormContent(stripHtml(note.content) || note.content || '')
     setFormError(null)
     setModalVisible(true)
   }
@@ -131,15 +141,10 @@ export function NotesScreen() {
     )
   }
 
-  const query = search.trim().toLowerCase()
-  const filtered = notes.filter((n) => {
-    if (!query) return true
-    const titleMatch = n.title?.toLowerCase().includes(query) ?? false
-    const contentMatch = n.content.toLowerCase().includes(query)
-    return titleMatch || contentMatch
-  })
-
-  const wordCount = formContent.trim() ? formContent.trim().split(/\s+/).length : 0
+  const filtered = filterNotes(notes, activeFilter, search)
+  const counts = getNoteCounts(notes)
+  const formWords = countWords(formContent)
+  const formChars = countChars(formContent)
 
   return (
     <Screen onRefresh={() => void loadNotes(true)} refreshing={refreshing}>
@@ -171,6 +176,37 @@ export function NotesScreen() {
         value={search}
       />
 
+      {/* Filter Chips */}
+      <View style={styles.filterRow}>
+        {(['all', 'today', 'titled'] as const).map((filterKey) => {
+          const isActive = activeFilter === filterKey
+          const label =
+            filterKey === 'all'
+              ? `All (${counts.all})`
+              : filterKey === 'today'
+              ? `Today (${counts.today})`
+              : `Titled (${counts.titled})`
+
+          return (
+            <TouchableOpacity
+              key={filterKey}
+              onPress={() => setActiveFilter(filterKey)}
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  isActive && styles.filterChipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+
       {error ? (
         <ErrorView message={error} onRetry={() => void loadNotes()} />
       ) : null}
@@ -179,16 +215,25 @@ export function NotesScreen() {
       {filtered.length === 0 ? (
         <EmptyState
           message={
-            query
+            search.trim()
               ? `No notes matching "${search}".`
+              : activeFilter === 'today'
+              ? 'No notes created or updated today.'
+              : activeFilter === 'titled'
+              ? 'No titled notes found.'
               : 'No notes created yet. Tap "+ New" to add your first note.'
           }
-          title={query ? 'No notes found' : 'Notes is empty'}
+          title={search.trim() ? 'No notes found' : 'Notes is empty'}
         />
       ) : (
         <View style={styles.list}>
           {filtered.map((note) => {
-            const preview = note.content.slice(0, 140).replace(/\n/g, ' ')
+            const stripped = stripHtml(note.content)
+            const preview = stripped.slice(0, 140)
+            const words = countWords(stripped)
+            const chars = countChars(stripped)
+            const timeAgo = fmtRelativeTime(note.updatedAt || note.createdAt)
+
             return (
               <TouchableOpacity
                 key={note.id}
@@ -197,9 +242,14 @@ export function NotesScreen() {
               >
                 <Card style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <Text style={styles.noteTitle} numberOfLines={1}>
-                      {note.title || 'Untitled Note'}
-                    </Text>
+                    <View style={styles.cardHeaderLeft}>
+                      <View style={styles.iconCircle}>
+                        <TrackerIcon name="notes" size="xs" color={colors.primary} />
+                      </View>
+                      <Text style={styles.noteTitle} numberOfLines={1}>
+                        {note.title?.trim() || 'Untitled Note'}
+                      </Text>
+                    </View>
                     <TouchableOpacity
                       onPress={() => handleDelete(note.id, note.title)}
                       style={styles.deleteBtn}
@@ -209,21 +259,24 @@ export function NotesScreen() {
                       <TrackerIcon name="trash" size="xs" color={colors.textMuted} />
                     </TouchableOpacity>
                   </View>
+
                   {preview ? (
                     <Text style={styles.previewText} numberOfLines={2}>
                       {preview}
                     </Text>
                   ) : null}
-                  <Text style={styles.noteDate}>
-                    {note.updatedAt || note.createdAt
-                      ? new Date(note.updatedAt || note.createdAt!).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : ''}
-                  </Text>
+
+                  <View style={styles.cardFooter}>
+                    <Text style={styles.statsBadge}>
+                      {words} {words === 1 ? 'word' : 'words'} • {chars} chars
+                    </Text>
+                    {timeAgo ? (
+                      <View style={styles.timeWrap}>
+                        <TrackerIcon name="clock" size="xs" color={colors.textSubtle} />
+                        <Text style={styles.noteDate}>{timeAgo}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                 </Card>
               </TouchableOpacity>
             )
@@ -263,7 +316,9 @@ export function NotesScreen() {
 
               <View style={styles.contentLabelRow}>
                 <Text style={styles.label}>Content</Text>
-                <Text style={styles.wordCount}>{wordCount} words</Text>
+                <Text style={styles.wordCount}>
+                  {formWords} {formWords === 1 ? 'word' : 'words'} • {formChars} chars
+                </Text>
               </View>
               <TextInput
                 multiline
@@ -325,6 +380,32 @@ const styles = StyleSheet.create({
     fontSize: typography.sm.fontSize,
     lineHeight: typography.sm.lineHeight,
   },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterChipText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: colors.white,
+    fontWeight: '700',
+  },
   list: {
     gap: spacing.sm,
   },
@@ -338,6 +419,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flex: 1,
+  },
+  iconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   noteTitle: {
     color: colors.text,
     fontSize: typography.md.fontSize,
@@ -346,16 +441,39 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     padding: spacing.xs,
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   previewText: {
     color: colors.textMuted,
     fontSize: typography.sm.fontSize,
     lineHeight: 20,
+    marginTop: 2,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  statsBadge: {
+    color: colors.textSubtle,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  timeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   noteDate: {
     color: colors.textSubtle,
     fontSize: 11,
-    marginTop: 4,
   },
   // Modal styles
   modalOverlay: {
