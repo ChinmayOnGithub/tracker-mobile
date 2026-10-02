@@ -41,148 +41,173 @@ interface CalendarEventRow {
   updated_at: string
 }
 
-function rowToEvent(r: CalendarEventRow): LocalCalendarEvent {
+function rowToEvent(row: CalendarEventRow): LocalCalendarEvent {
   return {
-    id: r.id,
-    googleEventId: r.google_event_id,
-    calendarId: r.calendar_id,
-    title: r.title,
-    description: r.description,
-    location: r.location,
-    startDate: r.start_date,
-    endDate: r.end_date,
-    allDay: r.all_day === 1,
-    color: normalizeColor(r.color, darkPalette.sky),
-    status: r.status,
-    trackerArtifactId: r.tracker_artifact_id,
-    trackerArtifactType: r.tracker_artifact_type,
-    isDeleted: r.is_deleted === 1,
-    syncedAt: r.synced_at,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    id: row.id,
+    googleEventId: row.google_event_id,
+    calendarId: row.calendar_id,
+    title: row.title,
+    description: row.description,
+    location: row.location,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    allDay: row.all_day === 1,
+    color: normalizeColor(row.color, darkPalette.sky),
+    status: row.status,
+    trackerArtifactId: row.tracker_artifact_id,
+    trackerArtifactType: row.tracker_artifact_type,
+    isDeleted: row.is_deleted === 1,
+    syncedAt: row.synced_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }
 
-/**
- * CalendarRepository
- *
- * Domain-oriented SQLite access for calendar_event rows.
- * Provides offline caching for Google Calendar events and mapped Tracker events.
- */
 export class CalendarRepository {
   constructor(private readonly db: SQLiteDatabase) {}
 
-  /** Read events within a date range (inclusive). */
-  async getByDateRange(startDate: string, endDate: string): Promise<LocalCalendarEvent[]> {
+  async getByDateRange(
+    startDate: string,
+    endDate: string
+  ): Promise<LocalCalendarEvent[]> {
     const rows = await this.db.getAllAsync<CalendarEventRow>(
-      `SELECT * FROM calendar_event
+      `SELECT
+         id, google_event_id, calendar_id, title, description, location,
+         start_date, end_date, all_day, color, status,
+         tracker_artifact_id, tracker_artifact_type, is_deleted,
+         synced_at, created_at, updated_at
+       FROM calendar_event
        WHERE is_deleted = 0
          AND start_date <= ?
          AND end_date >= ?
        ORDER BY start_date ASC;`,
       [endDate, startDate]
     )
+
     return rows.map(rowToEvent)
   }
 
-  /** Read events on a specific date. */
   async getByDate(dateStr: string): Promise<LocalCalendarEvent[]> {
     const startOfDay = `${dateStr}T00:00:00.000Z`
     const endOfDay = `${dateStr}T23:59:59.999Z`
     return this.getByDateRange(startOfDay, endOfDay)
   }
 
-  /** Read a single event by Google Event ID. */
-  async getByGoogleEventId(googleEventId: string): Promise<LocalCalendarEvent | null> {
+  async getByGoogleEventId(
+    googleEventId: string
+  ): Promise<LocalCalendarEvent | null> {
     const row = await this.db.getFirstAsync<CalendarEventRow>(
-      'SELECT * FROM calendar_event WHERE google_event_id = ? AND is_deleted = 0;',
+      'SELECT id, google_event_id, calendar_id, title, description, location, start_date, end_date, all_day, color, status, tracker_artifact_id, tracker_artifact_type, is_deleted, synced_at, created_at, updated_at FROM calendar_event WHERE google_event_id = ? AND is_deleted = 0;',
       [googleEventId]
     )
+
     return row ? rowToEvent(row) : null
   }
 
-  /** Upsert a batch of calendar events into SQLite. */
   async upsertEvents(events: LocalCalendarEvent[]): Promise<void> {
     if (events.length === 0) return
 
     await this.db.withTransactionAsync(async () => {
-      for (const e of events) {
+      for (const event of events) {
         await this.db.runAsync(
-          `INSERT OR REPLACE INTO calendar_event (
+          `INSERT INTO calendar_event (
             id, google_event_id, calendar_id, title, description, location,
             start_date, end_date, all_day, color, status,
             tracker_artifact_id, tracker_artifact_type, is_deleted,
             synced_at, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            google_event_id = excluded.google_event_id,
+            calendar_id = excluded.calendar_id,
+            title = excluded.title,
+            description = excluded.description,
+            location = excluded.location,
+            start_date = excluded.start_date,
+            end_date = excluded.end_date,
+            all_day = excluded.all_day,
+            color = excluded.color,
+            status = excluded.status,
+            tracker_artifact_id = excluded.tracker_artifact_id,
+            tracker_artifact_type = excluded.tracker_artifact_type,
+            is_deleted = excluded.is_deleted,
+            synced_at = excluded.synced_at,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at;`,
           [
-            e.id,
-            e.googleEventId,
-            e.calendarId,
-            e.title,
-            e.description ?? null,
-            e.location ?? null,
-            e.startDate,
-            e.endDate,
-            e.allDay ? 1 : 0,
-            e.color ?? null,
-            e.status,
-            e.trackerArtifactId ?? null,
-            e.trackerArtifactType ?? null,
-            e.isDeleted ? 1 : 0,
-            e.syncedAt,
-            e.createdAt,
-            e.updatedAt,
+            event.id,
+            event.googleEventId,
+            event.calendarId,
+            event.title,
+            event.description ?? null,
+            event.location ?? null,
+            event.startDate,
+            event.endDate,
+            event.allDay ? 1 : 0,
+            event.color ?? null,
+            event.status,
+            event.trackerArtifactId ?? null,
+            event.trackerArtifactType ?? null,
+            event.isDeleted ? 1 : 0,
+            event.syncedAt,
+            event.createdAt,
+            event.updatedAt,
           ]
         )
 
-        if (e.isDeleted) {
-          await this.db.runAsync(
-            'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
-            ['calendar_event', e.id]
-          )
-        } else {
-          await this.db.runAsync(
-            'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
-            ['calendar_event', e.id]
-          )
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['calendar_event', event.id]
+        )
+
+        if (!event.isDeleted) {
           await this.db.runAsync(
             'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
             [
               'calendar_event',
-              e.id,
-              e.title,
-              [e.description ?? '', e.location ?? '', e.status].filter(Boolean).join(' '),
-              e.updatedAt,
+              event.id,
+              event.title,
+              [event.description ?? '', event.location ?? '', event.status]
+                .filter(Boolean)
+                .join(' '),
+              event.updatedAt,
             ]
           )
-        )
+        }
       }
     })
   }
 
-  /** Soft-delete an event. */
   async markDeleted(id: string): Promise<void> {
     const now = new Date().toISOString()
-    await this.db.runAsync(
-      'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE id = ?;',
-      [now, id]
-    )
-    await this.db.runAsync(
-      'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
-      ['calendar_event', id]
-    )
+
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE id = ?;',
+        [now, id]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['calendar_event', id]
+      )
+    })
   }
 
-  /** Purge all events for a calendar (used on full 410 resync). */
   async clearCalendar(calendarId: string): Promise<void> {
     const now = new Date().toISOString()
-    await this.db.runAsync(
-      'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE calendar_id = ?;',
-      [now, calendarId]
-    )
-    await this.db.runAsync(
-      'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id IN (SELECT id FROM calendar_event WHERE calendar_id = ?);',
-      ['calendar_event', calendarId]
-    )
+
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE calendar_id = ?;',
+        [now, calendarId]
+      )
+      await this.db.runAsync(
+        `DELETE FROM tracker_search
+         WHERE entity_type = ?
+           AND entity_id IN (
+             SELECT id FROM calendar_event WHERE calendar_id = ?
+           );`,
+        ['calendar_event', calendarId]
+      )
+    })
   }
 }
