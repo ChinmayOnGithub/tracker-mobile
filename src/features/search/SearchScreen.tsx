@@ -180,7 +180,7 @@ export function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, gap: spacing.md },
-  heading: { ...typography.h2 },
+  heading: { ...typography.xl, fontWeight: '800' },
   searchBox: {
     minHeight: 48,
     borderWidth: 1,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  input: { flex: 1, ...typography.body },
+  input: { flex: 1, ...typography.base },
   list: { gap: spacing.sm, paddingBottom: spacing.xl },
   emptyList: { flexGrow: 1 },
   row: {
@@ -210,9 +210,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowBody: { flex: 1, gap: 3 },
-  title: { ...typography.body, fontWeight: '700' },
-  meta: { ...typography.caption },
+  title: { ...typography.base, fontWeight: '700' },
+  meta: { ...typography.xs },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
-  emptyTitle: { ...typography.h3 },
-  emptyBody: { ...typography.body, textAlign: 'center' },
+  emptyTitle: { ...typography.lg, fontWeight: '700' },
+  emptyBody: { ...typography.base, textAlign: 'center' },
 })
