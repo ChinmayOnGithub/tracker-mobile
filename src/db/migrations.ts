@@ -174,6 +174,22 @@ export const MIGRATIONS: Migration[] = [
       `)
     },
   },
+  {
+    version: 5,
+    name: 'local_search_fts',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS tracker_search
+        USING fts5(
+          entity_type UNINDEXED,
+          entity_id UNINDEXED,
+          title,
+          body,
+          updated_at UNINDEXED
+        );
+      `)
+    },
+  },
 ]
 
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
