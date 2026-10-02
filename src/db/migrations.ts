@@ -187,6 +187,26 @@ export const MIGRATIONS: Migration[] = [
           body,
           updated_at UNINDEXED
         );
+
+        INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at)
+        SELECT
+          'activity_template',
+          id,
+          name,
+          COALESCE(category, '') || ' ' || COALESCE(type, '') || ' ' || COALESCE(recurrence_type, ''),
+          updated_at
+        FROM activity_template
+        WHERE deleted_at IS NULL;
+
+        INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at)
+        SELECT
+          'activity_log',
+          id,
+          COALESCE(note, status),
+          COALESCE(status, '') || ' ' || COALESCE(note, '') || ' ' || COALESCE(payload_json, ''),
+          updated_at
+        FROM activity_log
+        WHERE deleted_at IS NULL;
       `)
     },
   },
