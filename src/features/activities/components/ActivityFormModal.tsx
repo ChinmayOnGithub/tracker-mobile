@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Modal,
   ScrollView,
@@ -7,31 +7,37 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import type { CreateTemplateInput } from '@/api/client'
+import type { ActivityTemplate, CreateTemplateInput } from '@/api/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { colors, paletteColors, radius, spacing, typography } from '@/theme/tokens'
 
-const FORM_CATEGORIES = ['work', 'personal', 'fitness', 'health', 'learning']
+const FORM_CATEGORIES = ['work', 'personal', 'fitness', 'health', 'learning', 'finance']
 const RECURRENCE_OPTIONS: CreateTemplateInput['recurrenceType'][] = [
   'daily',
   'weekly',
   'monthly',
   'custom',
+  'one_time',
 ]
+const PRIORITY_OPTIONS = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
 
-interface ActivityFormData {
+export interface ActivityFormData {
+  id?: string
   name: string
   category: string
   recurrenceType: CreateTemplateInput['recurrenceType']
   color: string
+  priority: string
+  notes?: string | null
 }
 
 interface ActivityFormModalProps {
   visible: boolean
   saving: boolean
   error: string | null
+  initialData?: ActivityTemplate | null
   onClose: () => void
   onSubmit: (data: ActivityFormData) => Promise<void>
 }
@@ -40,6 +46,7 @@ export function ActivityFormModal({
   visible,
   saving,
   error,
+  initialData,
   onClose,
   onSubmit,
 }: ActivityFormModalProps) {
@@ -47,18 +54,39 @@ export function ActivityFormModal({
   const [formCategory, setFormCategory] = useState('work')
   const [formRecurrence, setFormRecurrence] = useState<CreateTemplateInput['recurrenceType']>('daily')
   const [formColor, setFormColor] = useState<string>(paletteColors[0])
+  const [formPriority, setFormPriority] = useState<string>('NORMAL')
+  const [formNotes, setFormNotes] = useState<string>('')
   const [validationError, setValidationError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (initialData) {
+      setFormName(initialData.name)
+      setFormCategory(initialData.category || 'work')
+      setFormRecurrence((initialData.recurrenceType as CreateTemplateInput['recurrenceType']) || 'daily')
+      setFormColor(initialData.color || paletteColors[0])
+      setFormPriority(
+        'priority' in initialData && typeof initialData.priority === 'string'
+          ? initialData.priority
+          : 'NORMAL'
+      )
+      setFormNotes(initialData.notes || '')
+    } else {
+      setFormName('')
+      setFormCategory('work')
+      setFormRecurrence('daily')
+      setFormColor(paletteColors[0])
+      setFormPriority('NORMAL')
+      setFormNotes('')
+    }
+    setValidationError(null)
+  }, [initialData, visible])
+
   const handleClose = () => {
-    setFormName('')
-    setFormCategory('work')
-    setFormRecurrence('daily')
-    setFormColor(paletteColors[0])
     setValidationError(null)
     onClose()
   }
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     const trimmed = formName.trim()
     if (!trimmed) {
       setValidationError('Activity name is required.')
@@ -67,14 +95,18 @@ export function ActivityFormModal({
     setValidationError(null)
 
     await onSubmit({
+      id: initialData?.id,
       name: trimmed,
       category: formCategory,
       recurrenceType: formRecurrence,
       color: formColor,
+      priority: formPriority,
+      notes: formNotes.trim() || null,
     })
   }
 
   const displayError = validationError || error
+  const isEditing = !!initialData
 
   return (
     <Modal
@@ -86,7 +118,9 @@ export function ActivityFormModal({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>New Activity Template</Text>
+            <Text style={styles.modalTitle}>
+              {isEditing ? 'Edit Activity Template' : 'New Activity Template'}
+            </Text>
             <TouchableOpacity
               onPress={handleClose}
               accessibilityRole="button"
@@ -103,7 +137,7 @@ export function ActivityFormModal({
               placeholder="e.g. Morning Workout"
               value={formName}
               onChangeText={setFormName}
-              autoFocus
+              autoFocus={!isEditing}
             />
 
             <Text style={styles.label}>Category</Text>
@@ -150,11 +184,43 @@ export function ActivityFormModal({
                       formRecurrence === rec && styles.optionChipTextActive,
                     ]}
                   >
-                    {rec.charAt(0).toUpperCase() + rec.slice(1)}
+                    {rec === 'one_time' ? 'One-time' : rec.charAt(0).toUpperCase() + rec.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={styles.label}>Priority</Text>
+            <View style={styles.optionRow}>
+              {PRIORITY_OPTIONS.map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  onPress={() => setFormPriority(p)}
+                  style={[
+                    styles.optionChip,
+                    formPriority === p && styles.optionChipActive,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select priority ${p}`}
+                >
+                  <Text
+                    style={[
+                      styles.optionChipText,
+                      formPriority === p && styles.optionChipTextActive,
+                    ]}
+                  >
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.label}>Notes / Instructions (Optional)</Text>
+            <Input
+              placeholder="e.g. 3 sets of 10 reps"
+              value={formNotes}
+              onChangeText={setFormNotes}
+            />
 
             <Text style={styles.label}>Accent Color</Text>
             <View style={styles.colorPalette}>
@@ -186,8 +252,8 @@ export function ActivityFormModal({
               disabled={saving}
             />
             <Button
-              label={saving ? 'Saving...' : 'Create Activity'}
-              onPress={handleCreate}
+              label={saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Activity'}
+              onPress={handleSubmit}
               disabled={saving}
             />
           </View>
@@ -210,7 +276,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
-    maxHeight: '85%',
+    maxHeight: '88%',
   },
   modalHeader: {
     flexDirection: 'row',

@@ -1,14 +1,68 @@
+import { useCallback, useMemo, useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
+import { useSQLiteContext } from 'expo-sqlite'
+import { trackerApi } from '@/api/client'
 import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, spacing, typography } from '@/theme/tokens'
+import { OutboxRepository } from '@/db/repository'
+import { drainOutbox } from '@/sync'
+import { colors, radius, spacing, typography } from '@/theme/tokens'
 
 export function SettingsScreen() {
   const { user, logout } = useAuth()
+  const db = useSQLiteContext()
+  const outboxRepo = useMemo(() => new OutboxRepository(db), [db])
+
+  const [pendingCount, setPendingCount] = useState<number>(0)
+  const [draining, setDraining] = useState<boolean>(false)
+  const [syncingCalendar, setSyncingCalendar] = useState<boolean>(false)
+
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const count = await outboxRepo.getPendingCount()
+      setPendingCount(count)
+    } catch {
+      setPendingCount(0)
+    }
+  }, [outboxRepo])
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshPendingCount()
+    }, [refreshPendingCount])
+  )
+
+  const handleDrainOutbox = async () => {
+    setDraining(true)
+    try {
+      const result = await drainOutbox(db)
+      await refreshPendingCount()
+      Alert.alert(
+        'Outbox Sync Completed',
+        `Processed ${result.processed} mutations with ${result.errors} errors.`
+      )
+    } catch (err) {
+      Alert.alert('Outbox Sync Failed', err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setDraining(false)
+    }
+  }
+
+  const handleSyncCalendar = async () => {
+    setSyncingCalendar(true)
+    try {
+      await trackerApi.syncCalendar()
+      Alert.alert('Calendar Synced', 'Google Calendar 2-way sync successfully updated.')
+    } catch (err) {
+      Alert.alert('Calendar Sync Failed', err instanceof Error ? err.message : 'Unable to sync calendar')
+    } finally {
+      setSyncingCalendar(false)
+    }
+  }
 
   const handleSignOut = () => {
     Alert.alert(
@@ -34,9 +88,60 @@ export function SettingsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Settings & More</Text>
         <Text style={styles.subtitle}>
-          Account, data recovery, offline storage, and system settings.
+          Account, offline queue, Google Calendar, and recovery bin.
         </Text>
       </View>
+
+      {/* Outbox & Offline Sync Card */}
+      <Card style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={styles.iconHeadingWrap}>
+            <View style={styles.outboxIconWrap}>
+              <TrackerIcon name="upload" size="sm" color={colors.primary} />
+            </View>
+            <View style={styles.binCopyWrap}>
+              <Text style={styles.cardHeading}>Offline Outbox Queue</Text>
+              <Text style={styles.cardSubtext}>
+                {pendingCount === 0
+                  ? 'All changes uploaded to server.'
+                  : `${pendingCount} pending mutation${pendingCount === 1 ? '' : 's'} waiting to sync.`}
+              </Text>
+            </View>
+          </View>
+          <Button
+            label={draining ? 'Syncing...' : 'Sync Now'}
+            size="sm"
+            onPress={handleDrainOutbox}
+            disabled={draining || pendingCount === 0}
+            accessibilityLabel="Sync Outbox"
+          />
+        </View>
+      </Card>
+
+      {/* Google Calendar Integration Card */}
+      <Card style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={styles.iconHeadingWrap}>
+            <View style={styles.calendarIconWrap}>
+              <TrackerIcon name="calendar" size="sm" color={colors.sky} />
+            </View>
+            <View style={styles.binCopyWrap}>
+              <Text style={styles.cardHeading}>Google Calendar Sync</Text>
+              <Text style={styles.cardSubtext}>
+                Bi-directional sync between Tracker tasks and your Google account.
+              </Text>
+            </View>
+          </View>
+          <Button
+            label={syncingCalendar ? 'Syncing...' : 'Sync'}
+            variant="outline"
+            size="sm"
+            onPress={handleSyncCalendar}
+            disabled={syncingCalendar}
+            accessibilityLabel="Sync Google Calendar"
+          />
+        </View>
+      </Card>
 
       {/* Bin / Data Recovery Card */}
       <Card style={styles.card}>
@@ -81,19 +186,11 @@ export function SettingsScreen() {
         </View>
       </Card>
 
-      {/* Offline & Sync Status */}
+      {/* Offline & Sync Architecture */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Offline & Local Storage</Text>
         <Text style={styles.body}>
-          The mobile client caches activities, work sessions, journal entries, and notes locally in SQLite for rapid offline viewing. Auth tokens are secured inside Android Keystore / iOS Keychain via Expo SecureStore.
-        </Text>
-      </Card>
-
-      {/* System Boundary */}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Architecture Boundary</Text>
-        <Text style={styles.body}>
-          Mobile client provides rich native interactions and offline-first caches. Domain invariants, recurrence schedules, server timestamps, and subscriptions remain server-authoritative.
+          The mobile client caches activities, calendar events, work sessions, journal entries, and notes locally in SQLite for rapid offline viewing. Auth tokens are secured inside Android Keystore / iOS Keychain via Expo SecureStore.
         </Text>
       </Card>
 
@@ -141,6 +238,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flex: 1,
   },
+  outboxIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   binIconWrap: {
     width: 40,
     height: 40,
@@ -160,16 +273,14 @@ const styles = StyleSheet.create({
   },
   cardSubtext: {
     color: colors.textMuted,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: typography.xs.fontSize,
   },
   sectionTitle: {
-    color: colors.primary,
-    fontSize: typography.xs.fontSize,
-    lineHeight: typography.xs.lineHeight,
-    fontWeight: '800',
-    letterSpacing: 1,
+    color: colors.text,
+    fontSize: typography.sm.fontSize,
+    fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   item: {
     flexDirection: 'row',
@@ -179,20 +290,19 @@ const styles = StyleSheet.create({
   label: {
     color: colors.textMuted,
     fontSize: typography.sm.fontSize,
-    lineHeight: typography.sm.lineHeight,
   },
   value: {
     color: colors.text,
     fontSize: typography.sm.fontSize,
-    lineHeight: typography.sm.lineHeight,
     fontWeight: '600',
   },
   body: {
     color: colors.textMuted,
     fontSize: typography.sm.fontSize,
-    lineHeight: typography.sm.lineHeight * 1.3,
+    lineHeight: typography.sm.lineHeight,
   },
   signOutButton: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
   },
 })

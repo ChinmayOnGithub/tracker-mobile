@@ -17,6 +17,7 @@
  */
 
 export * from './types'
+export * from './drainWorker'
 
 export interface ISyncEngine {
   isConfigured(): boolean

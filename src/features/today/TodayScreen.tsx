@@ -13,21 +13,32 @@ import {
   trackerApi,
   type ActivityLog,
   type ActivityTemplate,
+  type CreateTemplateInput,
 } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorView } from '@/components/ErrorView'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { LogRepository, OutboxRepository, TemplateRepository } from '@/db/repository'
+import {
+  CalendarRepository,
+  LogRepository,
+  OutboxRepository,
+  TemplateRepository,
+  type LocalCalendarEvent,
+} from '@/db/repository'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { getNextActivityStatus, type ActivityStatus } from '@/domain/activity'
 import { computeTaskOccurrences, type TaskOccurrence } from '@/domain/timeline'
 import { TodayTaskRow } from './components/TodayTaskRow'
 import { TaskActionModal } from './components/TaskActionModal'
+import { QuickTaskAddBar } from './components/QuickTaskAddBar'
+import { CalendarEventsSection } from './components/CalendarEventsSection'
 import { WorkSessionCard } from './WorkSessionCard'
 import { WeightWidgetCard } from './WeightWidgetCard'
+import { JournalWidgetCard } from './JournalWidgetCard'
+import { DailyCodingCard } from './DailyCodingCard'
 
 function generateLocalUuid(): string {
   // Simple RFC4122 v4 UUID generator for local optimistic IDs
@@ -44,6 +55,7 @@ export function TodayScreen() {
   const [selectedDate, setSelectedDate] = useState(today)
   const [templates, setTemplates] = useState<ActivityTemplate[]>([])
   const [logs, setLogs] = useState<ActivityLog[]>([])
+  const [calendarEvents, setCalendarEvents] = useState<LocalCalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,6 +68,7 @@ export function TodayScreen() {
   const templateRepo = useMemo(() => new TemplateRepository(db), [db])
   const logRepo = useMemo(() => new LogRepository(db), [db])
   const outboxRepo = useMemo(() => new OutboxRepository(db), [db])
+  const calendarRepo = useMemo(() => new CalendarRepository(db), [db])
 
   // Load flow: SQLite-first (instant render), then server reconciliation in background
   const load = useCallback(
@@ -65,13 +78,15 @@ export function TodayScreen() {
 
       // Step 1: Read local SQLite immediately
       try {
-        const [cachedT, cachedL] = await Promise.all([
+        const [cachedT, cachedL, cachedE] = await Promise.all([
           templateRepo.getActiveTemplates(),
           logRepo.getByDate(selectedDate),
+          calendarRepo.getByDateRange(selectedDate, selectedDate),
         ])
-        if (cachedT.length > 0 || cachedL.length > 0) {
+        if (cachedT.length > 0 || cachedL.length > 0 || cachedE.length > 0) {
           setTemplates(cachedT)
           setLogs(cachedL)
+          setCalendarEvents(cachedE)
           setLoading(false)
         }
       } catch {
@@ -80,24 +95,53 @@ export function TodayScreen() {
 
       // Step 2: Background reconciliation from Tracker API
       try {
-        const [templateResult, logResult] = await Promise.all([
+        const [templateResult, logResult, calendarDayResult] = await Promise.all([
           trackerApi.getTemplates(),
           trackerApi.getLogs(selectedDate),
+          trackerApi.getCalendarDay(selectedDate).catch(() => null),
         ])
+
+        const now = new Date().toISOString()
+        const eventsToCache: LocalCalendarEvent[] = (
+          calendarDayResult?.day?.events || []
+        ).map((ev) => ({
+          id: ev.id,
+          googleEventId: ev.id,
+          calendarId: 'primary',
+          title: ev.title,
+          description: null,
+          location: null,
+          startDate: ev.start,
+          endDate: ev.end,
+          allDay: ev.allDay,
+          color: ev.color,
+          status: ev.status ?? 'confirmed',
+          trackerArtifactId: ev.trackerArtifactId,
+          trackerArtifactType: null,
+          isDeleted: false,
+          syncedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }))
 
         // Upsert to SQLite
         await Promise.all([
           templateRepo.upsertFromServer(templateResult.templates),
           logRepo.upsertFromServer(logResult.logs),
+          eventsToCache.length > 0
+            ? calendarRepo.upsertEvents(eventsToCache)
+            : Promise.resolve(),
         ])
 
         // Re-read canonical local SQLite state
-        const [freshT, freshL] = await Promise.all([
+        const [freshT, freshL, freshE] = await Promise.all([
           templateRepo.getActiveTemplates(),
           logRepo.getByDate(selectedDate),
+          calendarRepo.getByDateRange(selectedDate, selectedDate),
         ])
         setTemplates(freshT)
         setLogs(freshL)
+        setCalendarEvents(freshE)
       } catch (err) {
         // If network failed and we had no cache loaded yet, surface error
         if (templates.length === 0 && logs.length === 0) {
@@ -108,7 +152,7 @@ export function TodayScreen() {
         setRefreshing(false)
       }
     },
-    [selectedDate, templateRepo, logRepo, templates.length, logs.length]
+    [selectedDate, templateRepo, logRepo, calendarRepo, templates.length, logs.length]
   )
 
   useFocusEffect(
@@ -140,6 +184,58 @@ export function TodayScreen() {
   const completedCount = tasks.filter((t) => t.isCompleted).length
   const totalCount = tasks.length
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
+
+  // Quick Task Creation (optimistic write in SQLite transaction + outbox + server sync)
+  const handleCreateQuickTask = async (
+    input: CreateTemplateInput
+  ): Promise<ActivityTemplate> => {
+    const localId = generateLocalUuid()
+    const mutationId = generateLocalUuid()
+    const outboxId = generateLocalUuid()
+    const now = new Date().toISOString()
+
+    const optimisticTemplate: ActivityTemplate = {
+      id: localId,
+      name: input.name,
+      category: input.category,
+      type: input.type || 'TASK',
+      icon: input.icon || 'check',
+      color: input.color || 'blue',
+      recurrenceType: input.recurrenceType,
+      isActive: true,
+      notes: input.notes ?? null,
+      createdAt: now,
+      updatedAt: now,
+      ...('targetDate' in input && input.targetDate ? { targetDate: input.targetDate } : {}),
+    }
+
+    await db.withTransactionAsync(async () => {
+      await templateRepo.upsertFromServer([optimisticTemplate])
+      await outboxRepo.enqueue(
+        outboxId,
+        mutationId,
+        'activity_template',
+        localId,
+        'create_template',
+        input as unknown as Record<string, unknown>
+      )
+    })
+
+    setTemplates((prev) => [...prev, optimisticTemplate])
+
+    try {
+      const res = await trackerApi.createTemplate(input)
+      await templateRepo.upsertFromServer([res.template])
+      await outboxRepo.markDone(outboxId)
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === localId ? res.template : t))
+      )
+      return res.template
+    } catch {
+      await outboxRepo.markFailed(outboxId, 'Network failed during quick task create')
+      return optimisticTemplate
+    }
+  }
 
   // Checklist status cycling: optimistic update -> outbox enqueue -> API drain
   const handleCycleStatus = async (task: TaskOccurrence) => {
@@ -490,6 +586,9 @@ export function TodayScreen() {
 
       {error ? <ErrorView message={error} /> : null}
 
+      {/* Google Calendar Events Section */}
+      <CalendarEventsSection events={calendarEvents} />
+
       {/* Primary Section: TASKS */}
       <View style={styles.taskSection}>
         <View style={styles.sectionHeader}>
@@ -535,11 +634,25 @@ export function TodayScreen() {
             ))}
           </View>
         )}
+
+        {/* Pinned Quick Task Add Bar */}
+        <QuickTaskAddBar
+          createTemplate={handleCreateQuickTask}
+          onTaskCreated={(newT) => {
+            setTemplates((prev) => {
+              const exists = prev.some((t) => t.id === newT.id)
+              return exists ? prev : [...prev, newT]
+            })
+          }}
+          selectedDate={selectedDate}
+        />
       </View>
 
       {/* Secondary Dashboard Widgets */}
       <View style={styles.widgetsSection}>
         <WorkSessionCard date={selectedDate} />
+        <JournalWidgetCard date={selectedDate} />
+        <DailyCodingCard date={selectedDate} />
         <WeightWidgetCard date={selectedDate} />
       </View>
 

@@ -7,12 +7,17 @@ import { colors, spacing, typography } from '@/theme/tokens'
 interface ActivityCardProps {
   template: ActivityTemplate
   onDelete: (id: string, name: string) => void
+  onPress?: (template: ActivityTemplate) => void
 }
 
-export function ActivityCard({ template, onDelete }: ActivityCardProps) {
+export function ActivityCard({ template, onDelete, onPress }: ActivityCardProps) {
   return (
     <Card style={styles.card}>
-      <View style={styles.cardRow}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => onPress?.(template)}
+        style={styles.cardRow}
+      >
         <View
           style={[
             styles.indicator,
@@ -28,7 +33,10 @@ export function ActivityCard({ template, onDelete }: ActivityCardProps) {
           </Text>
         </View>
         <TouchableOpacity
-          onPress={() => onDelete(template.id, template.name)}
+          onPress={(e) => {
+            e.stopPropagation?.()
+            onDelete(template.id, template.name)
+          }}
           style={styles.deleteBtn}
           accessibilityRole="button"
           accessibilityLabel={`Delete ${template.name}`}
@@ -36,7 +44,7 @@ export function ActivityCard({ template, onDelete }: ActivityCardProps) {
         >
           <TrackerIcon name="trash" size="xs" color={colors.textMuted} />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     </Card>
   )
 }

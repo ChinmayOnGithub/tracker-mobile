@@ -6,6 +6,7 @@ import {
   trackerApi,
   type ActivityTemplate,
   type CreateTemplateInput,
+  type UpdateTemplateInput,
 } from '@/api/client'
 import { Button } from '@/components/Button'
 import { EmptyState } from '@/components/EmptyState'
@@ -17,7 +18,7 @@ import { OutboxRepository, TemplateRepository } from '@/db/repository'
 import { colors, spacing, typography } from '@/theme/tokens'
 import { ActivityCard } from './components/ActivityCard'
 import { ActivityCategoryPills } from './components/ActivityCategoryPills'
-import { ActivityFormModal } from './components/ActivityFormModal'
+import { ActivityFormModal, type ActivityFormData } from './components/ActivityFormModal'
 
 function generateLocalUuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -27,7 +28,7 @@ function generateLocalUuid(): string {
   })
 }
 
-const PRESET_CATEGORIES = ['all', 'work', 'personal', 'fitness', 'health', 'learning']
+const PRESET_CATEGORIES = ['all', 'work', 'personal', 'fitness', 'health', 'learning', 'finance']
 
 export function ActivitiesScreen() {
   const db = useSQLiteContext()
@@ -40,6 +41,7 @@ export function ActivitiesScreen() {
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<ActivityTemplate | null>(null)
   const [saving, setSaving] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
 
@@ -86,29 +88,48 @@ export function ActivitiesScreen() {
     }, [load])
   )
 
-  const handleCreate = async (data: {
-    name: string
-    category: string
-    recurrenceType: CreateTemplateInput['recurrenceType']
-    color: string
-  }) => {
+  const handleSaveActivity = async (data: ActivityFormData) => {
     setSaving(true)
     setModalError(null)
 
     try {
-      const input: CreateTemplateInput = {
-        name: data.name,
-        category: data.category,
-        recurrenceType: data.recurrenceType,
-        color: data.color,
-        icon: 'activity',
+      if (data.id) {
+        // Editing existing template
+        const updateInput: UpdateTemplateInput = {
+          name: data.name,
+          category: data.category,
+          recurrenceType: data.recurrenceType,
+          color: data.color,
+          priority: data.priority,
+          notes: data.notes,
+        }
+        const res = await trackerApi.updateTemplate(data.id, updateInput)
+        await templateRepo.upsertFromServer([res.template])
+        setTemplates((prev) =>
+          prev.map((t) => (t.id === data.id ? res.template : t))
+        )
+      } else {
+        // Creating new template
+        const createInput: CreateTemplateInput = {
+          name: data.name,
+          category: data.category,
+          recurrenceType: data.recurrenceType,
+          color: data.color,
+          icon: 'activity',
+          priority: data.priority,
+          notes: data.notes,
+        }
+        const res = await trackerApi.createTemplate(createInput)
+        await templateRepo.upsertFromServer([res.template])
+        setTemplates((prev) =>
+          [...prev, res.template].sort((a, b) => a.name.localeCompare(b.name))
+        )
       }
-      const res = await trackerApi.createTemplate(input)
-      await templateRepo.upsertFromServer([res.template])
-      setTemplates((prev) => [...prev, res.template].sort((a, b) => a.name.localeCompare(b.name)))
       setModalVisible(false)
     } catch (err) {
-      setModalError(err instanceof Error ? err.message : 'Failed to create activity.')
+      setModalError(
+        err instanceof Error ? err.message : 'Failed to save activity.'
+      )
     } finally {
       setSaving(false)
     }
@@ -186,6 +207,7 @@ export function ActivitiesScreen() {
             label="+ New"
             size="sm"
             onPress={() => {
+              setEditingTemplate(null)
               setModalError(null)
               setModalVisible(true)
             }}
@@ -218,32 +240,41 @@ export function ActivitiesScreen() {
       {/* Activity List */}
       {filtered.length === 0 ? (
         <EmptyState
+          title="No activities found"
           message={
-            query
-              ? `No activities matching "${search}".`
-              : 'No activities configured yet. Tap "+ New" to create one.'
+            query || selectedCategory !== 'all'
+              ? 'Try adjusting your search or category filters.'
+              : 'Add your first recurring habit or daily routine.'
           }
-          title={query ? 'No results' : 'No activities'}
         />
       ) : (
         <View style={styles.list}>
-          {filtered.map((template) => (
+          {filtered.map((item) => (
             <ActivityCard
-              key={template.id}
-              template={template}
+              key={item.id}
               onDelete={handleDelete}
+              onPress={(t) => {
+                setEditingTemplate(t)
+                setModalError(null)
+                setModalVisible(true)
+              }}
+              template={item}
             />
           ))}
         </View>
       )}
 
-      {/* Create Activity Modal */}
+      {/* Modal for Create / Edit Activity */}
       <ActivityFormModal
-        visible={modalVisible}
-        saving={saving}
         error={modalError}
-        onClose={() => setModalVisible(false)}
-        onSubmit={handleCreate}
+        initialData={editingTemplate}
+        onClose={() => {
+          setEditingTemplate(null)
+          setModalVisible(false)
+        }}
+        onSubmit={handleSaveActivity}
+        saving={saving}
+        visible={modalVisible}
       />
     </Screen>
   )
@@ -255,18 +286,17 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   headerTitleWrap: {
     flex: 1,
-    gap: 4,
   },
   title: {
     color: colors.text,
-    fontSize: typography.hero.fontSize,
-    lineHeight: typography.hero.lineHeight,
+    fontSize: typography.xl.fontSize,
+    lineHeight: typography.xl.lineHeight,
     fontWeight: '800',
   },
   subtitle: {
@@ -276,5 +306,6 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: spacing.sm,
+    paddingBottom: spacing.xl,
   },
 })

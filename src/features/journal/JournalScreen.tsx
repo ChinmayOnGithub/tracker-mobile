@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   Alert,
   KeyboardAvoidingView,
@@ -28,7 +28,7 @@ const MOODS = [
   { label: 'Tough', value: 'tough', color: colors.danger, emoji: '😫' },
 ]
 
-type SectionTab = 'entry' | 'gratitude' | 'plan'
+type SectionTab = 'entry' | 'gratitude' | 'plan' | 'history'
 
 export function JournalScreen() {
   const [selectedDate, setSelectedDate] = useState(todayYmd())
@@ -45,6 +45,20 @@ export function JournalScreen() {
   const [tomorrowPlan, setTomorrowPlan] = useState('')
 
   const isToday = selectedDate === todayYmd()
+
+  const pastDays = useMemo(() => {
+    const days: { dateStr: string; displayDate: string; isToday: boolean }[] = []
+    const today = todayYmd()
+    for (let i = 0; i < 14; i++) {
+      const d = addDays(today, -i)
+      days.push({
+        dateStr: d,
+        displayDate: formatDisplayDate(d),
+        isToday: d === today,
+      })
+    }
+    return days
+  }, [])
 
   const loadJournal = useCallback(async (dateStr: string) => {
     setLoading(true)
@@ -262,6 +276,21 @@ export function JournalScreen() {
                   {"Tomorrow's Plan"}
                 </Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setActiveTab('history')}
+                style={[styles.sectionTab, activeTab === 'history' && styles.sectionTabActive]}
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[
+                    styles.sectionTabText,
+                    activeTab === 'history' && styles.sectionTabTextActive,
+                  ]}
+                >
+                  History
+                </Text>
+              </TouchableOpacity>
             </View>
 
             {/* Input Card depending on active tab */}
@@ -322,40 +351,85 @@ export function JournalScreen() {
               </Card>
             )}
 
-            {/* Footer Actions & Status */}
-            <View style={styles.footerRow}>
-              <View style={styles.statusIndicator}>
-                {saveStatus === 'saved' && (
-                  <Text style={styles.statusTextSaved}>✓ Saved</Text>
-                )}
-                {saveStatus === 'saving' && (
-                  <Text style={styles.statusTextSaving}>Saving...</Text>
-                )}
-                {saveStatus === 'dirty' && (
-                  <Text style={styles.statusTextDirty}>• Unsaved changes</Text>
-                )}
-              </View>
+            {activeTab === 'history' && (
+              <Card style={styles.editorCard}>
+                <Text style={styles.editorHint}>Recent 14 Days Journal History:</Text>
+                <View style={styles.historyList}>
+                  {pastDays.map((d) => {
+                    const isCurrent = d.dateStr === selectedDate
+                    return (
+                      <TouchableOpacity
+                        key={d.dateStr}
+                        onPress={() => {
+                          setSelectedDate(d.dateStr)
+                          setActiveTab('entry')
+                        }}
+                        style={[
+                          styles.historyRow,
+                          isCurrent && styles.historyRowActive,
+                        ]}
+                      >
+                        <View style={styles.historyRowTextCol}>
+                          <Text
+                            style={[
+                              styles.historyDateText,
+                              isCurrent && styles.historyDateTextActive,
+                            ]}
+                          >
+                            {d.displayDate}
+                          </Text>
+                          {d.isToday ? (
+                            <Text style={styles.historyTodayTag}>TODAY</Text>
+                          ) : null}
+                        </View>
+                        <TrackerIcon
+                          name="chevron-right"
+                          size="xs"
+                          color={isCurrent ? colors.coral : colors.textSubtle}
+                        />
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              </Card>
+            )}
 
-              <View style={styles.actionsRight}>
-                {entry && (
+            {/* Footer Actions & Status */}
+            {activeTab !== 'history' && (
+              <View style={styles.footerRow}>
+                <View style={styles.statusIndicator}>
+                  {saveStatus === 'saved' && (
+                    <Text style={styles.statusTextSaved}>✓ Saved</Text>
+                  )}
+                  {saveStatus === 'saving' && (
+                    <Text style={styles.statusTextSaving}>Saving...</Text>
+                  )}
+                  {saveStatus === 'dirty' && (
+                    <Text style={styles.statusTextDirty}>• Unsaved changes</Text>
+                  )}
+                </View>
+
+                <View style={styles.actionsRight}>
+                  {entry && (
+                    <Button
+                      label="Delete"
+                      variant="destructive"
+                      size="sm"
+                      onPress={handleDelete}
+                      disabled={saving}
+                      accessibilityLabel="Delete journal entry"
+                    />
+                  )}
                   <Button
-                    label="Delete"
-                    variant="destructive"
+                    label={saving ? 'Saving...' : 'Save Journal'}
                     size="sm"
-                    onPress={handleDelete}
+                    onPress={handleSave}
                     disabled={saving}
-                    accessibilityLabel="Delete journal entry"
+                    accessibilityLabel="Save journal entry"
                   />
-                )}
-                <Button
-                  label={saving ? 'Saving...' : 'Save Journal'}
-                  size="sm"
-                  onPress={handleSave}
-                  disabled={saving}
-                  accessibilityLabel="Save journal entry"
-                />
+                </View>
               </View>
-            </View>
+            )}
           </ScrollView>
         )}
       </KeyboardAvoidingView>
@@ -534,5 +608,47 @@ const styles = StyleSheet.create({
   actionsRight: {
     flexDirection: 'row',
     gap: spacing.xs,
+  },
+  historyList: {
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+  },
+  historyRowActive: {
+    borderColor: colors.coral,
+    backgroundColor: 'rgba(255, 117, 87, 0.08)',
+  },
+  historyRowTextCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  historyDateText: {
+    fontSize: typography.sm.fontSize,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  historyDateTextActive: {
+    color: colors.coral,
+    fontWeight: '700',
+  },
+  historyTodayTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.coral,
+    backgroundColor: colors.coralSubtle,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
 })
