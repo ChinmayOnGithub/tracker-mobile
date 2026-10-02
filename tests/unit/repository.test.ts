@@ -204,9 +204,19 @@ function makeDb() {
         })
       }
       if (sql.includes('UPDATE calendar_event SET is_deleted = 1')) {
-        const id = params?.[1] as string
-        const row = events.get(id)
-        if (row) { row.is_deleted = 1; row.updated_at = params?.[0] as string }
+        const calId = params?.[1] as string
+        const now = params?.[0] as string
+        if (sql.includes('WHERE calendar_id')) {
+          // Soft-delete all events for a calendar
+          for (const [, ev] of events.entries()) {
+            if (ev.calendar_id === calId) { ev.is_deleted = 1; ev.updated_at = now }
+          }
+        } else {
+          // Soft-delete a single event
+          const id = params?.[1] as string
+          const row = events.get(id)
+          if (row) { row.is_deleted = 1; row.updated_at = now }
+        }
       }
       if (sql.includes('DELETE FROM calendar_event WHERE calendar_id = ?')) {
         const calId = params?.[0] as string
@@ -460,7 +470,10 @@ describe('CalendarRepository', () => {
     ])
 
     await repo.clearCalendar('primary')
-    expect(db._events.has('cal-1')).toBe(false)
+    // clearCalendar now soft-deletes instead of hard-deletes (maintains soft-delete invariant)
+    expect(db._events.has('cal-1')).toBe(true)
+    expect(db._events.get('cal-1')?.is_deleted).toBe(1)
     expect(db._events.has('cal-2')).toBe(true)
+    expect(db._events.get('cal-2')?.is_deleted).toBe(0)
   })
 })

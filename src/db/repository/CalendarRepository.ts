@@ -148,6 +148,10 @@ export class CalendarRepository {
 
   /** Purge all events for a calendar (used on full 410 resync). */
   async clearCalendar(calendarId: string): Promise<void> {
-    await this.db.runAsync('DELETE FROM calendar_event WHERE calendar_id = ?;', [calendarId])
+    const now = new Date().toISOString()
+    await this.db.runAsync(
+      'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE calendar_id = ?;',
+      [now, calendarId]
+    )
   }
 }

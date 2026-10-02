@@ -27,6 +27,12 @@ export async function drainOutbox(db: SQLiteDatabase): Promise<DrainResult> {
       await outboxRepo.markDone(entry.id)
       processed++
     } catch (err) {
+      // 401 is a permanent auth failure — stop draining immediately
+      if (err instanceof Error && err.message.includes('UNAUTHORIZED')) {
+        errors++
+        break // Stop processing mutations, allow app to handle logout
+      }
+
       errors++
       const message = err instanceof Error ? err.message : 'Unknown outbox sync error'
       await outboxRepo.markFailed(entry.id, message)
