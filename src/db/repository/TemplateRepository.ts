@@ -11,7 +11,6 @@ interface TemplateRow {
   color: string
   recurrence_type: string
   is_active: number
-  version?: number
   created_at: string
   updated_at: string
 }
@@ -26,7 +25,6 @@ function rowToTemplate(r: TemplateRow): ActivityTemplate {
     color: normalizeColor(r.color, darkPalette.coral),
     recurrenceType: r.recurrence_type,
     isActive: r.is_active === 1,
-    version: r.version ?? 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -70,7 +68,6 @@ export class TemplateRepository {
   /**
    * Upsert a batch of templates from a server response.
    * INSERT OR REPLACE keeps SQLite in sync with server state.
-   * Version-aware: ignores updates where incoming.version <= local.version (#186).
    * Clears tombstones for restored entities.
    */
   async upsertFromServer(templates: ActivityTemplate[]): Promise<void> {
@@ -78,22 +75,22 @@ export class TemplateRepository {
 
     await this.db.withTransactionAsync(async () => {
       for (const t of templates) {
-        // Version-aware check (#186): if incoming.version <= local.version, ignore
-        const existing = await this.db.getFirstAsync<{ version: number }>(
-          'SELECT version FROM activity_template WHERE id = ?;',
-          [t.id]
-        )
-        if (existing && t.version !== undefined && t.version <= (existing.version || 0)) {
-          continue
-        }
-
-        const templateVersion = t.version ?? 1
-
         await this.db.runAsync(
-          `INSERT OR REPLACE INTO activity_template (
+          `INSERT INTO activity_template (
             id, name, category, type, icon, color, recurrence_type,
-            is_active, version, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            is_active, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            category = excluded.category,
+            type = excluded.type,
+            icon = excluded.icon,
+            color = excluded.color,
+            recurrence_type = excluded.recurrence_type,
+            is_active = excluded.is_active,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            deleted_at = NULL;`,
           [
             t.id,
             t.name,
@@ -103,7 +100,6 @@ export class TemplateRepository {
             t.color,
             t.recurrenceType,
             t.isActive ? 1 : 0,
-            templateVersion,
             t.createdAt,
             t.updatedAt,
           ]
@@ -113,6 +109,15 @@ export class TemplateRepository {
         await this.db.runAsync(
           "DELETE FROM tombstones WHERE entity_type = 'activity_template' AND entity_id = ?;",
           [t.id]
+        )
+
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['activity_template', t.id]
+        )
+        await this.db.runAsync(
+          'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+          ['activity_template', t.id, t.name, [t.category, t.type, t.recurrenceType].filter(Boolean).join(' '), t.updatedAt]
         )
       }
     })
@@ -133,6 +138,10 @@ export class TemplateRepository {
         `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at)
          VALUES ('activity_template', ?, ?);`,
         [id, now]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['activity_template', id]
       )
     })
   }

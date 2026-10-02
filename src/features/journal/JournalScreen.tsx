@@ -22,6 +22,8 @@ import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 import { fastCache } from '@/utils/dataCache'
 import { appEvents } from '@/utils/events'
+import { useSQLiteContext } from 'expo-sqlite'
+import { indexJournal, removeJournalFromSearch } from '@/utils/searchIndex'
 import {
   JOURNAL_MOODS,
   countChars,
@@ -32,6 +34,7 @@ import {
 } from './journal-presentation'
 
 export function JournalScreen() {
+  const db = useSQLiteContext()
   const { colors } = useTheme()
   const [selectedDate, setSelectedDate] = useState(todayYmd())
   const [entry, setEntry] = useState<JournalEntry | null>(null)
@@ -73,8 +76,9 @@ export function JournalScreen() {
     isDirtyRef.current = false
 
     // Check fastCache first for instant 0ms render
-    const cached = fastCache.get<JournalEntry | null>(`journal:${dateStr}`)
-    if (cached !== undefined) {
+    const cacheKey = `journal:${dateStr}`
+    const cached = fastCache.get<JournalEntry | null>(cacheKey)
+    if (fastCache.has(cacheKey)) {
       if (cached) {
         setEntry(cached)
         setContent(cached.content || '')
@@ -102,6 +106,7 @@ export function JournalScreen() {
     try {
       const res = await trackerApi.getJournalEntry(dateStr)
       fastCache.set(`journal:${dateStr}`, res.entry)
+      await indexJournal(db, res.entry)
       if (res.entry) {
         setEntry(res.entry)
         setContent(res.entry.content || '')
@@ -229,6 +234,7 @@ export function JournalScreen() {
               await trackerApi.deleteJournalEntry(entry.id)
               setEntry(null)
               fastCache.set(`journal:${selectedDate}`, null)
+              await removeJournalFromSearch(db, entry.id)
               appEvents.emit('journal:changed')
               setContent('')
               setMood(null)

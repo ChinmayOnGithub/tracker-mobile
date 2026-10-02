@@ -155,6 +155,61 @@ export const MIGRATIONS: Migration[] = [
       `)
     },
   },
+  {
+    version: 4,
+    name: 'performance_indexes',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_activity_log_date_active
+          ON activity_log(date, deleted_at, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_activity_template_active_name
+          ON activity_template(is_active, deleted_at, name);
+
+        CREATE INDEX IF NOT EXISTS idx_calendar_event_range_deleted
+          ON calendar_event(start_date, end_date, is_deleted);
+
+        CREATE INDEX IF NOT EXISTS idx_mutation_queue_ready
+          ON mutation_queue(status, next_attempt_at, created_at);
+      `)
+    },
+  },
+  {
+    version: 5,
+    name: 'local_search_fts',
+    up: async (db: SQLiteDatabase) => {
+      await db.execAsync(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS tracker_search
+        USING fts5(
+          entity_type UNINDEXED,
+          entity_id UNINDEXED,
+          title,
+          body,
+          updated_at UNINDEXED
+        );
+
+        INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at)
+        SELECT
+          'activity_template',
+          id,
+          name,
+          COALESCE(category, '') || ' ' || COALESCE(type, '') || ' ' || COALESCE(recurrence_type, ''),
+          updated_at
+        FROM activity_template
+        WHERE deleted_at IS NULL;
+
+        INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at)
+        SELECT
+          'activity_log',
+          id,
+          COALESCE(note, status),
+          COALESCE(status, '') || ' ' || COALESCE(note, '') || ' ' || COALESCE(payload_json, ''),
+          updated_at
+        FROM activity_log
+        WHERE deleted_at IS NULL;
+      `)
+    },
+  },
 ]
 
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {

@@ -3,13 +3,97 @@ import { trackerApi } from '@/api/client'
 import { TemplateRepository, LogRepository } from '@/db/repository'
 import { fastCache } from './dataCache'
 import { todayYmd } from './date'
+import { indexNotes } from './searchIndex'
 
 let isPrefetching = false
 
+const CACHE_TTL_MS = 30_000
+const LOW_PRIORITY_DELAY_MS = 750
+
+function later(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function prefetchTemplates(repo: TemplateRepository): Promise<void> {
+  if (fastCache.isFresh('templates', CACHE_TTL_MS)) return
+  try {
+    const response = await trackerApi.getTemplates()
+    if (!response.templates) return
+    await repo.upsertFromServer(response.templates)
+    fastCache.set('templates', response.templates, CACHE_TTL_MS)
+  } catch {
+    // Prefetch is opportunistic.
+  }
+}
+
+async function prefetchLogs(repo: LogRepository, date: string): Promise<void> {
+  const key = `logs:${date}`
+  if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+  try {
+    const response = await trackerApi.getLogs(date)
+    if (!response.logs) return
+    await repo.upsertFromServer(response.logs)
+    fastCache.set(key, response.logs, CACHE_TTL_MS)
+  } catch {
+    // Prefetch is opportunistic.
+  }
+}
+
+async function prefetchCalendar(month: string): Promise<void> {
+  const key = `cal:month:${month}`
+  if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+  try {
+    const response = await trackerApi.getCalendarMonth(month)
+    if (response.summaries) fastCache.set(key, response.summaries, CACHE_TTL_MS)
+  } catch {
+    // Prefetch is opportunistic.
+  }
+}
+
+async function prefetchSecondary(db: SQLiteDatabase, year: number): Promise<void> {
+  await later(LOW_PRIORITY_DELAY_MS)
+
+  await Promise.allSettled([
+    (async () => {
+      if (fastCache.isFresh('notes', CACHE_TTL_MS)) return
+      try {
+        const response = await trackerApi.getNotes()
+        if (response.notes) {
+          fastCache.set('notes', response.notes, CACHE_TTL_MS)
+          await indexNotes(db, response.notes)
+        }
+      } catch {
+        // Prefetch is opportunistic.
+      }
+    })(),
+    (async () => {
+      const key = `leave:${year}`
+      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+      try {
+        const response = await trackerApi.getLeaveData(year)
+        fastCache.set(key, response, CACHE_TTL_MS)
+      } catch {
+        // Prefetch is opportunistic.
+      }
+    })(),
+    (async () => {
+      const key = 'weight_history:7'
+      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+      try {
+        const response = await trackerApi.getWeightHistory(7)
+        if (response.records) fastCache.set(key, response.records, CACHE_TTL_MS)
+      } catch {
+        // Prefetch is opportunistic.
+      }
+    })(),
+  ])
+}
+
 /**
- * Proactively prefetches critical app data (templates, today's logs, calendar month, notes)
- * in the background on app startup and caches it in SQLite + memory.
- * Ensures all tab navigations are instant with 0ms perceived latency.
+ * Warms the local-first data path without making startup depend on a large
+ * network burst. Critical data is fetched first; secondary data is delayed.
+ *
+ * The UI should never await this function.
  */
 export async function prefetchAppData(db: SQLiteDatabase): Promise<void> {
   if (isPrefetching) return
@@ -17,51 +101,22 @@ export async function prefetchAppData(db: SQLiteDatabase): Promise<void> {
 
   const today = todayYmd()
   const monthStr = today.slice(0, 7)
+  const currentYear = new Date().getFullYear()
 
   try {
     const templateRepo = new TemplateRepository(db)
     const logRepo = new LogRepository(db)
 
-    const currentYear = new Date().getFullYear()
-
-    // Parallel fetch in background without blocking UI
-    const [templatesRes, logsRes, calRes, notesRes, leaveRes, weightRes] = await Promise.allSettled([
-      trackerApi.getTemplates(),
-      trackerApi.getLogs(today),
-      trackerApi.getCalendarMonth(monthStr),
-      trackerApi.getNotes(),
-      trackerApi.getLeaveData(currentYear),
-      trackerApi.getWeightHistory(7),
+    await Promise.allSettled([
+      prefetchTemplates(templateRepo),
+      prefetchLogs(logRepo, today),
+      prefetchCalendar(monthStr),
     ])
 
-    if (templatesRes.status === 'fulfilled' && templatesRes.value.templates) {
-      await templateRepo.upsertFromServer(templatesRes.value.templates)
-      fastCache.set('templates', templatesRes.value.templates)
-    }
-
-    if (logsRes.status === 'fulfilled' && logsRes.value.logs) {
-      await logRepo.upsertFromServer(logsRes.value.logs)
-      fastCache.set(`logs:${today}`, logsRes.value.logs)
-    }
-
-    if (calRes.status === 'fulfilled' && calRes.value.summaries) {
-      fastCache.set(`cal:month:${monthStr}`, calRes.value.summaries)
-    }
-
-    if (notesRes.status === 'fulfilled' && notesRes.value.notes) {
-      fastCache.set('notes', notesRes.value.notes)
-    }
-
-    if (leaveRes.status === 'fulfilled' && leaveRes.value) {
-      fastCache.set(`leave:${currentYear}`, leaveRes.value)
-    }
-
-    if (weightRes.status === 'fulfilled' && weightRes.value?.records) {
-      fastCache.set('weight_history:7', weightRes.value.records)
-    }
-  } catch {
-    // Non-blocking background prefetch
+    await prefetchSecondary(db, currentYear)
   } finally {
+    // Keep the guard held until every scheduled request finishes so a second
+    // mount cannot create another overlapping prefetch burst.
     isPrefetching = false
   }
 }

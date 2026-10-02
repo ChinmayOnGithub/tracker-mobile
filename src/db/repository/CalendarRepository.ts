@@ -134,6 +134,28 @@ export class CalendarRepository {
             e.updatedAt,
           ]
         )
+
+        if (e.isDeleted) {
+          await this.db.runAsync(
+            'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+            ['calendar_event', e.id]
+          )
+        } else {
+          await this.db.runAsync(
+            'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+            ['calendar_event', e.id]
+          )
+          await this.db.runAsync(
+            'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+            [
+              'calendar_event',
+              e.id,
+              e.title,
+              [e.description ?? '', e.location ?? '', e.status].filter(Boolean).join(' '),
+              e.updatedAt,
+            ]
+          )
+        )
       }
     })
   }
@@ -145,6 +167,10 @@ export class CalendarRepository {
       'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE id = ?;',
       [now, id]
     )
+    await this.db.runAsync(
+      'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+      ['calendar_event', id]
+    )
   }
 
   /** Purge all events for a calendar (used on full 410 resync). */
@@ -153,6 +179,10 @@ export class CalendarRepository {
     await this.db.runAsync(
       'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE calendar_id = ?;',
       [now, calendarId]
+    )
+    await this.db.runAsync(
+      'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id IN (SELECT id FROM calendar_event WHERE calendar_id = ?);',
+      ['calendar_event', calendarId]
     )
   }
 }

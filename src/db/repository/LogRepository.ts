@@ -9,7 +9,6 @@ interface LogRow {
   note: string | null
   amount: number | null
   payload_json: string | null
-  version?: number
   created_at: string
   updated_at: string
 }
@@ -23,7 +22,6 @@ function rowToLog(r: LogRow): ActivityLog {
     note: r.note,
     amount: r.amount,
     payload: r.payload_json ? (JSON.parse(r.payload_json) as unknown) : undefined,
-    version: r.version ?? 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -82,7 +80,6 @@ export class LogRepository {
   /**
    * Upsert a batch of logs from a server response.
    * INSERT OR REPLACE keeps SQLite in sync with server state.
-   * Version-aware: ignores updates where incoming.version <= local.version (#186).
    * Clears tombstones for restored entities.
    */
   async upsertFromServer(logs: ActivityLog[]): Promise<void> {
@@ -90,21 +87,20 @@ export class LogRepository {
 
     await this.db.withTransactionAsync(async () => {
       for (const log of logs) {
-        // Version-aware check (#186): if incoming.version <= local.version, ignore
-        const existing = await this.db.getFirstAsync<{ version: number }>(
-          'SELECT version FROM activity_log WHERE id = ?;',
-          [log.id]
-        )
-        if (existing && log.version !== undefined && log.version <= (existing.version || 0)) {
-          continue
-        }
-
-        const logVersion = log.version ?? 1
-
         await this.db.runAsync(
-          `INSERT OR REPLACE INTO activity_log (
-            id, activity_id, date, status, note, amount, payload_json, version, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          `INSERT INTO activity_log (
+            id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            activity_id = excluded.activity_id,
+            date = excluded.date,
+            status = excluded.status,
+            note = excluded.note,
+            amount = excluded.amount,
+            payload_json = excluded.payload_json,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            deleted_at = NULL;`,
           [
             log.id,
             log.activityId,
@@ -113,7 +109,6 @@ export class LogRepository {
             log.note ?? null,
             log.amount ?? null,
             log.payload ? JSON.stringify(log.payload) : null,
-            logVersion,
             log.createdAt,
             log.updatedAt,
           ]
@@ -124,6 +119,21 @@ export class LogRepository {
           "DELETE FROM tombstones WHERE entity_type = 'activity_log' AND entity_id = ?;",
           [log.id]
         )
+
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['activity_log', log.id]
+        )
+        await this.db.runAsync(
+          'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+          [
+            'activity_log',
+            log.id,
+            log.note ?? log.status,
+            [log.status, log.note ?? '', log.payload ? JSON.stringify(log.payload) : ''].join(' '),
+            log.updatedAt,
+          ]
+        )
       }
     })
   }
@@ -133,22 +143,38 @@ export class LogRepository {
    * Uses a client-generated id (UUID v4). The outbox will reconcile with server.
    */
   async optimisticCreate(log: ActivityLog): Promise<void> {
-    await this.db.runAsync(
-      `INSERT OR REPLACE INTO activity_log (
-        id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-      [
-        log.id,
-        log.activityId,
-        log.date,
-        log.status,
-        log.note ?? null,
-        log.amount ?? null,
-        log.payload ? JSON.stringify(log.payload) : null,
-        log.createdAt,
-        log.updatedAt,
-      ]
-    )
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        `INSERT OR REPLACE INTO activity_log (
+          id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          log.id,
+          log.activityId,
+          log.date,
+          log.status,
+          log.note ?? null,
+          log.amount ?? null,
+          log.payload ? JSON.stringify(log.payload) : null,
+          log.createdAt,
+          log.updatedAt,
+        ]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['activity_log', log.id]
+      )
+      await this.db.runAsync(
+        'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+        [
+          'activity_log',
+          log.id,
+          log.note ?? log.status,
+          [log.status, log.note ?? '', log.payload ? JSON.stringify(log.payload) : ''].join(' '),
+          log.updatedAt,
+        ]
+      )
+    })
   }
 
   /**
@@ -162,17 +188,45 @@ export class LogRepository {
     payload?: unknown
   ): Promise<void> {
     const now = new Date().toISOString()
-    if (amount !== undefined || payload !== undefined) {
-      await this.db.runAsync(
-        'UPDATE activity_log SET status = ?, amount = ?, payload_json = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
-        [status, amount ?? null, payload ? JSON.stringify(payload) : null, now, id]
+
+    await this.db.withTransactionAsync(async () => {
+      if (amount !== undefined || payload !== undefined) {
+        await this.db.runAsync(
+          'UPDATE activity_log SET status = ?, amount = ?, payload_json = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
+          [status, amount ?? null, payload ? JSON.stringify(payload) : null, now, id]
+        )
+      } else {
+        await this.db.runAsync(
+          'UPDATE activity_log SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
+          [status, now, id]
+        )
+      }
+
+      const row = await this.db.getFirstAsync<{
+        note: string | null
+        payload_json: string | null
+      }>(
+        'SELECT note, payload_json FROM activity_log WHERE id = ? AND deleted_at IS NULL;',
+        [id]
       )
-    } else {
-      await this.db.runAsync(
-        'UPDATE activity_log SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
-        [status, now, id]
-      )
-    }
+
+      if (row) {
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['activity_log', id]
+        )
+        await this.db.runAsync(
+          'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+          [
+            'activity_log',
+            id,
+            row.note ?? status,
+            [status, row.note ?? '', row.payload_json ?? ''].join(' '),
+            now,
+          ]
+        )
+      }
+    })
   }
 
   /**
@@ -190,6 +244,10 @@ export class LogRepository {
         `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at)
          VALUES ('activity_log', ?, ?);`,
         [id, now]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['activity_log', id]
       )
     })
   }

@@ -1,5 +1,7 @@
 import * as SecureStore from 'expo-secure-store'
 import { config } from '@/config'
+import { dedupeRequest } from '@/utils/requestDeduper'
+import { measureAsync } from '@/utils/performance'
 import type {
   ActivityLog,
   ActivityTemplate,
@@ -72,7 +74,7 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function performFetch<T>(
+async function performFetchUnshared<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
@@ -88,7 +90,7 @@ async function performFetch<T>(
   const headers = new Headers(customHeaders)
   headers.set('Accept', 'application/json')
 
-  if (rest.body && !headers.has('Content-Type') && !(typeof FormData !== 'undefined' && rest.body instanceof FormData)) {
+  if (rest.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -105,11 +107,13 @@ async function performFetch<T>(
     const timer = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
-      const response = await fetch(url, {
-        ...rest,
-        headers,
-        signal: controller.signal,
-      })
+      const response = await measureAsync(`api:${rest.method ?? 'GET'}:${path}`, () =>
+        fetch(url, {
+          ...rest,
+          headers,
+          signal: controller.signal,
+        })
+      )
 
       clearTimeout(timer)
 
@@ -166,9 +170,7 @@ async function performFetch<T>(
         )
       }
 
-      return (payload && typeof payload === 'object' && 'data' in payload
-        ? (payload as { data: T }).data
-        : (payload as unknown as T))
+      return payload.data
     } catch (err: unknown) {
       clearTimeout(timer)
 
@@ -195,6 +197,25 @@ async function performFetch<T>(
   }
 
   throw new ApiError('Unable to connect to Tracker server', 'NETWORK_UNAVAILABLE')
+}
+
+async function performFetch<T>(
+  path: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const method = options.method ?? 'GET'
+  if (method === 'GET') {
+    const authenticated = options.authenticated ?? true
+    const token = authenticated ? await getToken() : null
+    const key = `GET:${config.apiUrl}${path}:${token ?? ''}`
+
+    // Deduplicate the entire logical request, including response parsing and
+    // retries. Deduplicating only fetch() is unsafe because Response bodies
+    // are single-consumption objects.
+    return dedupeRequest(key, () => performFetchUnshared<T>(path, options))
+  }
+
+  return performFetchUnshared<T>(path, options)
 }
 
 export const trackerApi = {
@@ -265,25 +286,6 @@ export const trackerApi = {
   async deleteLog(id: string) {
     return performFetch<{ deleted: boolean; id: string }>(
       `/api/mobile/v1/activities/logs/${encodeURIComponent(id)}`,
-      {
-        method: 'DELETE',
-        retries: 0,
-      }
-    )
-  },
-
-  async postponeTask(templateId: string, currentDate: string, existingLogId?: string | null) {
-    return performFetch<{ nextDate: string }>('/api/mobile/v1/activities/logs/postpone', {
-      method: 'POST',
-      body: JSON.stringify({ templateId, currentDate, existingLogId }),
-      retries: 0,
-    })
-  },
-
-  async unpostponeTask(templateId: string, logId: string, originalDate: string) {
-    const params = new URLSearchParams({ templateId, logId, originalDate })
-    return performFetch<{ restored: boolean }>(
-      `/api/mobile/v1/activities/logs/postpone?${params.toString()}`,
       {
         method: 'DELETE',
         retries: 0,
@@ -557,18 +559,6 @@ export const trackerApi = {
       `/api/mobile/v1/vault?id=${encodeURIComponent(id)}`,
       { method: 'DELETE', retries: 0 }
     )
-  },
-
-  async uploadVaultFile(formData: FormData) {
-    return performFetch<{ success: boolean; document: import('./types').VaultItem }>('/api/vault/upload', {
-      method: 'POST',
-      body: formData,
-      retries: 0,
-    })
-  },
-
-  getVaultDownloadUrl(id: string): string {
-    return `${config.apiUrl}/api/vault/download/${encodeURIComponent(id)}`
   },
 }
 export * from './types'

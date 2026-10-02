@@ -35,7 +35,7 @@
           "configureAndroidBackup": true
         }
       ],
-      "expo-sqlite",
+      ["expo-sqlite", { "enableFTS": true }],
       [
         "expo-splash-screen",
         {
