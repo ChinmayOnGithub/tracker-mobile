@@ -31,7 +31,14 @@ export async function drainOutbox(db: SQLiteDatabase): Promise<DrainResult> {
       processed++
     } catch (err) {
       // 401 is a permanent auth failure — stop draining immediately
-      if (err instanceof Error && err.message.includes('UNAUTHORIZED')) {
+      const isUnauthorized =
+        (err instanceof Error && err.message.includes('UNAUTHORIZED')) ||
+        (typeof err === 'object' && err !== null && (
+          ('code' in err && (err as { code: unknown }).code === 'UNAUTHORIZED') ||
+          ('status' in err && (err as { status: unknown }).status === 401)
+        ))
+
+      if (isUnauthorized) {
         errors++
         break // Stop processing mutations, allow app to handle logout
       }
