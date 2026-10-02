@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { useSQLiteContext } from 'expo-sqlite'
 import { trackerApi, type VaultBreadcrumb, type VaultItem } from '@/api/client'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
@@ -20,6 +21,7 @@ import { Screen } from '@/components/Screen'
 import { TrackerIcon, type TrackerIconName } from '@/components/TrackerIcon'
 import { useTheme } from '@/theme/ThemeContext'
 import { radius, spacing, typography } from '@/theme/tokens'
+import { SearchRepository } from '@/db/repository'
 
 function formatBytes(bytes?: number | null): string {
   if (!bytes || bytes <= 0) return '0 B'
@@ -38,6 +40,7 @@ function getItemIcon(item: VaultItem): TrackerIconName {
 }
 
 export function VaultScreen() {
+  const db = useSQLiteContext()
   const { colors } = useTheme()
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [items, setItems] = useState<VaultItem[]>([])
@@ -66,6 +69,15 @@ export function VaultScreen() {
         if (res.breadcrumbs && res.breadcrumbs.length > 0) {
           setBreadcrumbs(res.breadcrumbs)
         }
+        await new SearchRepository(db).upsertMany(
+          res.items.map((item) => ({
+            entityType: 'vault' as const,
+            entityId: item.id,
+            title: item.name,
+            body: item.isFolder ? 'folder' : [item.extension ?? '', item.fileSize ?? ''].join(' '),
+            updatedAt: item.updatedAt ?? item.createdAt ?? null,
+          }))
+        )
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unable to load Vault items.')
       } finally {
@@ -73,7 +85,7 @@ export function VaultScreen() {
         setRefreshing(false)
       }
     },
-    [currentFolderId]
+    [currentFolderId, db]
   )
 
   useFocusEffect(
@@ -116,6 +128,7 @@ export function VaultScreen() {
             try {
               await trackerApi.deleteVaultItem(item.id)
               setItems((prev) => prev.filter((i) => i.id !== item.id))
+              await new SearchRepository(db).remove('vault', item.id)
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete item.')
             }
