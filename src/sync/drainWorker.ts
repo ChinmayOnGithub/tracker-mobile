@@ -7,6 +7,9 @@ import {
 } from '@/api/client'
 import { OutboxRepository, type OutboxEntry } from '@/db/repository/OutboxRepository'
 
+// Max attempts before a mutation is moved to permanent failure (dead letter)
+const MAX_ATTEMPTS = 20
+
 export interface DrainResult {
   processed: number
   errors: number
@@ -35,7 +38,13 @@ export async function drainOutbox(db: SQLiteDatabase): Promise<DrainResult> {
 
       errors++
       const message = err instanceof Error ? err.message : 'Unknown outbox sync error'
-      await outboxRepo.markFailed(entry.id, message)
+      
+      // After MAX_ATTEMPTS, move to permanent failure (dead letter) instead of retrying
+      if (entry.attemptCount >= MAX_ATTEMPTS) {
+        await outboxRepo.markPermanentlyFailed(entry.id, `Permanent failure after ${MAX_ATTEMPTS} attempts: ${message}`)
+      } else {
+        await outboxRepo.markFailed(entry.id, message)
+      }
     }
   }
 
