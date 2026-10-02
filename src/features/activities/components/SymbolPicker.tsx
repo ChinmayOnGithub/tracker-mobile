@@ -161,7 +161,7 @@ export function SymbolPicker({
               {/* Locked / Crown Badge */}
               {locked ? (
                 <View style={styles.proBadge}>
-                  <TrackerIcon name="crown" size={10} color="#f59e0b" />
+                  <TrackerIcon name="crown" size={10} color={colors.warning} />
                 </View>
               ) : null}
             </Pressable>

@@ -168,7 +168,7 @@ export function SettingsScreen() {
                 accessibilityLabel={`Select accent ${opt.label}`}
               >
                 {isSelected ? (
-                  <TrackerIcon name="check" size="xs" color="#ffffff" />
+                  <TrackerIcon name="check" size="xs" color={colors.white} />
                 ) : null}
               </TouchableOpacity>
             )
@@ -183,13 +183,13 @@ export function SettingsScreen() {
             <View
               style={[
                 styles.planIconWrap,
-                { backgroundColor: isPro ? 'rgba(245, 158, 11, 0.18)' : `${colors.primary}22` },
+                { backgroundColor: isPro ? colors.warningSubtle : colors.primarySubtle },
               ]}
             >
               <TrackerIcon
                 name={isPro ? 'crown' : 'shield'}
                 size="sm"
-                color={isPro ? '#f59e0b' : colors.primary}
+                color={isPro ? colors.warning : colors.primary}
               />
             </View>
             <View style={styles.binCopyWrap}>
@@ -198,13 +198,13 @@ export function SettingsScreen() {
                 <View
                   style={[
                     styles.planBadge,
-                    { backgroundColor: isPro ? '#f59e0b25' : colors.surfaceRaised },
+                    { backgroundColor: isPro ? colors.warningSubtle : colors.surfaceRaised },
                   ]}
                 >
                   <Text
                     style={[
                       styles.planBadgeText,
-                      { color: isPro ? '#f59e0b' : colors.textMuted },
+                      { color: isPro ? colors.warning : colors.textMuted },
                     ]}
                   >
                     {isPro ? 'PRO ⚡' : 'FREE'}
@@ -267,7 +267,7 @@ export function SettingsScreen() {
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
-            <View style={[styles.calendarIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+            <View style={[styles.calendarIconWrap, { backgroundColor: colors.sky, opacity: 0.15 }]}>
               <TrackerIcon name="calendar" size="sm" color={colors.sky} />
             </View>
             <View style={styles.binCopyWrap}>
@@ -292,7 +292,7 @@ export function SettingsScreen() {
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
           <View style={styles.iconHeadingWrap}>
-            <View style={[styles.leaveIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+            <View style={[styles.leaveIconWrap, { backgroundColor: colors.warningSubtle }]}>
               <TrackerIcon name="calendar" size="sm" color={colors.warning} />
             </View>
             <View style={styles.binCopyWrap}>

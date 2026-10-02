@@ -9,7 +9,8 @@ import {
 } from 'react-native'
 import { Card } from '@/components/Card'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
+import { radius, spacing, typography } from '@/theme/tokens'
 
 interface DailyCodingCardProps {
   platform?: 'leetcode' | 'gfg'
@@ -24,8 +25,11 @@ interface ProblemData {
 }
 
 export function DailyCodingCard({ platform = 'leetcode', date: _date }: DailyCodingCardProps) {
+  const { colors } = useTheme()
   const [problem, setProblem] = useState<ProblemData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   useEffect(() => {
     // Default POTD representation for rapid instant render
@@ -97,7 +101,7 @@ export function DailyCodingCard({ platform = 'leetcode', date: _date }: DailyCod
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   card: {
     padding: 0,
     overflow: 'hidden',
@@ -120,7 +124,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: colors.warningSubtle,
     alignItems: 'center',
     justifyContent: 'center',
   },
