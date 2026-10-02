@@ -23,6 +23,7 @@ import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 import { fastCache } from '@/utils/dataCache'
 import { appEvents } from '@/utils/events'
+import { indexNote, indexNotes, removeNoteFromSearch } from '@/utils/searchIndex'
 import { fmtRelativeTime } from '@/utils/date'
 import {
   countChars,
@@ -34,6 +35,7 @@ import {
 } from './notes-presentation'
 
 export function NotesScreen() {
+  const db = useSQLiteContext()
   const { colors } = useTheme()
   const styles = useMemo(() => createStyles(colors), [colors])
   const [notes, setNotes] = useState<NoteItem[]>([])
@@ -74,6 +76,7 @@ export function NotesScreen() {
       const res = await trackerApi.getNotes()
       setNotes(res.notes)
       fastCache.set('notes', res.notes)
+      await indexNotes(db, res.notes)
     } catch (err) {
       if (!cached || cached.length === 0) {
         setError(err instanceof Error ? err.message : 'Unable to load notes.')
@@ -127,13 +130,15 @@ export function NotesScreen() {
         setNotes((prev) =>
           prev.map((n) => (n.id === editingNote.id ? res.note : n))
         )
-        fastCache.set('notes', (prevNotes: NoteItem[] = []) =>
-          prevNotes.map((n) => (n.id === editingNote.id ? res.note : n))
+        fastCache.update<NoteItem[]>('notes', (prevNotes) =>
+          (prevNotes ?? []).map((n) => (n.id === editingNote.id ? res.note : n))
         )
+        await indexNote(db, res.note)
       } else {
         const res = await trackerApi.createNote(formContent, formTitle)
         setNotes((prev) => [res.note, ...prev])
-        fastCache.set('notes', (prevNotes: NoteItem[] = []) => [res.note, ...prevNotes])
+        fastCache.update<NoteItem[]>('notes', (prevNotes) => [res.note, ...(prevNotes ?? [])])
+        await indexNote(db, res.note)
       }
       appEvents.emit('notes:changed')
       setModalVisible(false)
@@ -157,9 +162,10 @@ export function NotesScreen() {
             try {
               await trackerApi.deleteNote(id)
               setNotes((prev) => prev.filter((n) => n.id !== id))
-              fastCache.set('notes', (prevNotes: NoteItem[] = []) =>
-                prevNotes.filter((n) => n.id !== id)
+              fastCache.update<NoteItem[]>('notes', (prevNotes) =>
+                (prevNotes ?? []).filter((n) => n.id !== id)
               )
+              await removeNoteFromSearch(db, id)
               appEvents.emit('notes:changed')
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete note.')
