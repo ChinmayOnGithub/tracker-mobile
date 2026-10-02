@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   Alert,
   Modal,
@@ -33,6 +33,7 @@ import {
 
 export function NotesScreen() {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
   const [notes, setNotes] = useState<NoteItem[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<NoteFilterType>('all')
@@ -147,8 +148,6 @@ export function NotesScreen() {
   const counts = getNoteCounts(notes)
   const formWords = countWords(formContent)
   const formChars = countChars(formContent)
-
-  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   return (
     <Screen onRefresh={() => void loadNotes(true)} refreshing={refreshing}>

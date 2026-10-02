@@ -1,4 +1,4 @@
-﻿import type { SQLiteDatabase } from 'expo-sqlite'
+import type { SQLiteDatabase } from 'expo-sqlite'
 import type { ActivityTemplate } from '@/api/types'
 
 interface TemplateRow {

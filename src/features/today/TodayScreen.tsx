@@ -54,6 +54,7 @@ function generateLocalUuid(): string {
 
 export function TodayScreen() {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
   const db = useSQLiteContext()
   const today = todayYmd()
   const [selectedDate, setSelectedDate] = useState(today)
@@ -584,8 +585,6 @@ export function TodayScreen() {
   }
 
   const isToday = selectedDate === today
-
-  const styles = useMemo(() => createStyles(colors), [colors])
 
   return (
     <Screen onRefresh={() => void load(true)} refreshing={refreshing}>

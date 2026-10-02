@@ -249,6 +249,13 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
             ))}
           </View>
 
+          {error && (
+            <View style={[styles.successBanner, { borderColor: colors.danger, backgroundColor: colors.surfaceRaised }]}>
+              <TrackerIcon name="close" size="xs" color={colors.danger} />
+              <Text style={[styles.successBannerText, { color: colors.danger }]}>{error}</Text>
+            </View>
+          )}
+
           {successBanner && (
             <View style={styles.successBanner}>
               <TrackerIcon name="check" size="xs" color={colors.success} />
@@ -944,11 +951,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   deleteBtnText: {
-    fontSize: typography.xs.fontSize,
-    color: colors.danger,
-    fontWeight: '600',
-  },
-})
     fontSize: typography.xs.fontSize,
     color: colors.danger,
     fontWeight: '600',

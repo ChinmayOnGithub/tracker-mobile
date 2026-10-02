@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'bun:test'
+import { describe, expect, it } from 'bun:test'
 import { MIGRATIONS } from '@/db/migrations'
 
 describe('SQLite Database Migrations', () => {

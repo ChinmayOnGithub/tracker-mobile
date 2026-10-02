@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Modal,
   Pressable,
@@ -35,6 +35,17 @@ export function TaskActionModal({
   onRePostpone,
 }: TaskActionModalProps) {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
+  const [valueInput, setValueInput] = useState<string>('')
+
+  useEffect(() => {
+    if (task?.template.amount) {
+      setValueInput(String(task.template.amount))
+    } else {
+      setValueInput('')
+    }
+  }, [task?.template.amount, visible])
+
   if (!task) return null
 
   const isDone = task.isCompleted
@@ -46,9 +57,6 @@ export function TaskActionModal({
   const isValueTarget =
     completionConfig.method === 'VALUE' ||
     (typeof task.template.amount === 'number' && task.template.amount > 0)
-
-  const defaultVal = task.template.amount ? String(task.template.amount) : ''
-  const [valueInput, setValueInput] = useState<string>(defaultVal)
 
   const handleMarkDone = () => {
     let completionVal: { amount?: number | null; payload?: Record<string, unknown> } | undefined

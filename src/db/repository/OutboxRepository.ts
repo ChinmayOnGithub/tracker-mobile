@@ -1,4 +1,4 @@
-﻿import type { SQLiteDatabase } from 'expo-sqlite'
+import type { SQLiteDatabase } from 'expo-sqlite'
 
 export type OutboxOperation = 'create_log' | 'update_log' | 'delete_log' | 'create_template' | 'update_template' | 'delete_template'
 export type OutboxStatus = 'pending' | 'processing' | 'done' | 'failed'

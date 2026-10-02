@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { StyleSheet, Text, View, Modal, Pressable, TouchableOpacity } from 'react-native'
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
@@ -15,6 +15,7 @@ interface WeightWidgetCardProps {
 
 export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps) {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
   const [records, setRecords] = useState<WeightRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
@@ -90,8 +91,6 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
   if (loading) {
     return null
   }
-
-  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   return (
     <>

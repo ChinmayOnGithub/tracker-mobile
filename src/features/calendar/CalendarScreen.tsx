@@ -32,6 +32,7 @@ const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function CalendarScreen() {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
   const db = useSQLiteContext()
   const calendarRepo = useMemo(() => new CalendarRepository(db), [db])
 
@@ -537,8 +538,6 @@ export function CalendarScreen() {
     year: 'numeric',
     timeZone: 'UTC',
   })
-
-  const styles = useMemo(() => createStyles(colors), [colors])
 
   return (
     <Screen onRefresh={() => void loadData(true)} refreshing={refreshing}>

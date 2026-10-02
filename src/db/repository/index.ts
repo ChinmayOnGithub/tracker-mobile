@@ -1,4 +1,4 @@
-﻿export { TemplateRepository } from './TemplateRepository'
+export { TemplateRepository } from './TemplateRepository'
 export { LogRepository } from './LogRepository'
 export { OutboxRepository } from './OutboxRepository'
 export { CalendarRepository } from './CalendarRepository'

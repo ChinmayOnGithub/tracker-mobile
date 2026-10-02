@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { Alert } from 'react-native'
 import { trackerApi } from '@/api/client'
 import type { BillingEntitlementsResponse, BillingSubscription } from '@/api/types'
@@ -79,7 +79,7 @@ export function EntitlementProvider({ children }: { children: React.ReactNode })
   const isPro = Boolean(entitlements?.isPro ?? user?.isPro ?? false)
   const tier = entitlements?.tier ?? user?.tier ?? 'FREE'
   const plan = entitlements?.plan ?? user?.plan ?? 'FREE'
-  const features = entitlements?.features ?? {}
+  const features = useMemo(() => entitlements?.features ?? {}, [entitlements?.features])
   const limits = entitlements?.limits ?? DEFAULT_LIMITS
   const subscription = entitlements?.subscription ?? null
 

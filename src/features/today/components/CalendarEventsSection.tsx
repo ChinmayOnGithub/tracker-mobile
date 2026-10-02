@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import {
   Linking,
   Pressable,
@@ -17,7 +17,8 @@ interface CalendarEventsSectionProps {
 
 export function CalendarEventsSection({ events }: CalendarEventsSectionProps) {
   const { colors } = useTheme()
-  
+  const styles = useMemo(() => createStyles(colors), [colors])
+
   if (events.length === 0) return null
 
   const handleOpenLink = (url?: string | null) => {
@@ -27,8 +28,6 @@ export function CalendarEventsSection({ events }: CalendarEventsSectionProps) {
       })
     }
   }
-
-  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   return (
     <View style={styles.container}>
