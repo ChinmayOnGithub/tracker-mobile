@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 import type { LocalCalendarEvent } from '@/db/repository'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { radius, spacing, typography } from '@/theme/tokens'
+import { normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 
 interface CalendarEventsSectionProps {
@@ -84,7 +84,7 @@ export function CalendarEventsSection({ events }: CalendarEventsSectionProps) {
               <View
                 style={[
                   styles.accentBar,
-                  { backgroundColor: event.color || colors.sky },
+                  { backgroundColor: normalizeColor(event.color, colors.sky) },
                 ]}
               />
 

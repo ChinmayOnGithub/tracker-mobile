@@ -20,6 +20,8 @@ import { TrackerIcon } from '@/components/TrackerIcon'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
+import { fastCache } from '@/utils/dataCache'
+import { appEvents } from '@/utils/events'
 import {
   JOURNAL_MOODS,
   countChars,
@@ -67,11 +69,39 @@ export function JournalScreen() {
   }, [])
 
   const loadJournal = useCallback(async (dateStr: string) => {
-    setLoading(true)
     setSaveStatus(null)
     isDirtyRef.current = false
+
+    // Check fastCache first for instant 0ms render
+    const cached = fastCache.get<JournalEntry | null>(`journal:${dateStr}`)
+    if (cached !== undefined) {
+      if (cached) {
+        setEntry(cached)
+        setContent(cached.content || '')
+        setMood(cached.mood || null)
+        setGratitude(cached.gratitude || '')
+        setReflections(cached.reflections || '')
+        setLessonsLearned(cached.lessonsLearned || '')
+        setTomorrowPlan(cached.tomorrowPlan || '')
+        setSaveStatus('saved')
+      } else {
+        setEntry(null)
+        setContent('')
+        setMood(null)
+        setGratitude('')
+        setReflections('')
+        setLessonsLearned('')
+        setTomorrowPlan('')
+        setSaveStatus(null)
+      }
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+
     try {
       const res = await trackerApi.getJournalEntry(dateStr)
+      fastCache.set(`journal:${dateStr}`, res.entry)
       if (res.entry) {
         setEntry(res.entry)
         setContent(res.entry.content || '')
@@ -92,7 +122,9 @@ export function JournalScreen() {
         setSaveStatus(null)
       }
     } catch {
-      setEntry(null)
+      if (cached === undefined) {
+        setEntry(null)
+      }
     } finally {
       setLoading(false)
       isDirtyRef.current = false
@@ -104,6 +136,12 @@ export function JournalScreen() {
       void loadJournal(selectedDate)
     }, [selectedDate, loadJournal])
   )
+
+  useEffect(() => {
+    return appEvents.on('journal:changed', () => {
+      void loadJournal(selectedDate)
+    })
+  }, [selectedDate, loadJournal])
 
   const performSave = useCallback(
     async (targetDate: string, isSilent = false) => {
@@ -122,6 +160,8 @@ export function JournalScreen() {
         })
         const res = await trackerApi.upsertJournalEntry(targetDate, payload)
         setEntry(res.entry)
+        fastCache.set(`journal:${targetDate}`, res.entry)
+        appEvents.emit('journal:changed')
         setSaveStatus('saved')
         isDirtyRef.current = false
       } catch (err) {
@@ -188,6 +228,8 @@ export function JournalScreen() {
             try {
               await trackerApi.deleteJournalEntry(entry.id)
               setEntry(null)
+              fastCache.set(`journal:${selectedDate}`, null)
+              appEvents.emit('journal:changed')
               setContent('')
               setMood(null)
               setGratitude('')

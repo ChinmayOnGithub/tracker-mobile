@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useSQLiteContext } from 'expo-sqlite'
@@ -15,7 +15,9 @@ import { Input } from '@/components/Input'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { OutboxRepository, TemplateRepository } from '@/db/repository'
-import { colors, spacing, typography } from '@/theme/tokens'
+import { colors, normalizeColor, spacing, typography } from '@/theme/tokens'
+import { fastCache } from '@/utils/dataCache'
+import { appEvents } from '@/utils/events'
 import { ActivityCard } from './components/ActivityCard'
 import { ActivityCategoryPills } from './components/ActivityCategoryPills'
 import { ActivityFormModal, type ActivityFormData } from './components/ActivityFormModal'
@@ -53,25 +55,41 @@ export function ActivitiesScreen() {
       if (isPull) setRefreshing(true)
       setError(null)
 
-      // Step 1: Instant local SQLite read
+      // Step 1: Memory cache (0ms instant render)
+      const memoryTemplates = fastCache.get<ActivityTemplate[]>('templates')
+      if (memoryTemplates && memoryTemplates.length > 0) {
+        setTemplates(memoryTemplates)
+        setLoading(false)
+      }
+
+      // Step 2: Instant local SQLite read
       try {
         const cached = await templateRepo.getActiveTemplates()
         if (cached.length > 0) {
           setTemplates(cached)
+          fastCache.set('templates', cached)
           setLoading(false)
         }
       } catch {
         // Fall through to server fetch
       }
 
-      // Step 2: Background reconciliation from server
+      // Step 3: If not pull-to-refresh and cache is fresh, skip network
+      if (!isPull && fastCache.isFresh('templates')) {
+        setLoading(false)
+        setRefreshing(false)
+        return
+      }
+
+      // Step 4: Background reconciliation from server
       try {
         const result = await trackerApi.getTemplates()
         await templateRepo.upsertFromServer(result.templates)
         const fresh = await templateRepo.getActiveTemplates()
         setTemplates(fresh)
+        fastCache.set('templates', fresh)
       } catch (err) {
-        if (templates.length === 0) {
+        if (templates.length === 0 && (!memoryTemplates || memoryTemplates.length === 0)) {
           setError(err instanceof Error ? err.message : 'Unable to load activities.')
         }
       } finally {
@@ -87,6 +105,13 @@ export function ActivitiesScreen() {
       void load()
     }, [load])
   )
+
+  // React to cross-tab activity events immediately
+  useEffect(() => {
+    return appEvents.on('activities:changed', () => {
+      void load()
+    })
+  }, [load])
 
   const handleSaveActivity = async (data: ActivityFormData) => {
     setSaving(true)
@@ -109,13 +134,16 @@ export function ActivitiesScreen() {
         setTemplates((prev) =>
           prev.map((t) => (t.id === data.id ? res.template : t))
         )
+        fastCache.set('templates', (prevTemplates: ActivityTemplate[] = []) =>
+          prevTemplates.map((t) => (t.id === data.id ? res.template : t))
+        )
       } else {
         // Creating new template
         const createInput: CreateTemplateInput = {
           name: data.name,
           category: data.category,
           recurrenceType: data.recurrenceType,
-          color: data.color,
+          color: normalizeColor(data.color, colors.coral),
           icon: data.icon || 'activity',
           priority: data.priority,
           notes: data.notes,
@@ -125,7 +153,12 @@ export function ActivitiesScreen() {
         setTemplates((prev) =>
           [...prev, res.template].sort((a, b) => a.name.localeCompare(b.name))
         )
+        fastCache.set('templates', (prevTemplates: ActivityTemplate[] = []) =>
+          [...prevTemplates, res.template].sort((a, b) => a.name.localeCompare(b.name))
+        )
       }
+      appEvents.emit('activities:changed')
+      appEvents.emit('tasks:changed')
       setModalVisible(false)
     } catch (err) {
       setModalError(
@@ -162,6 +195,11 @@ export function ActivitiesScreen() {
                 )
               })
               setTemplates((prev) => prev.filter((t) => t.id !== id))
+              fastCache.set('templates', (prevTemplates: ActivityTemplate[] = []) =>
+                prevTemplates.filter((t) => t.id !== id)
+              )
+              appEvents.emit('activities:changed')
+              appEvents.emit('tasks:changed')
 
               try {
                 await trackerApi.deleteTemplate(id)

@@ -47,7 +47,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react-native'
-import { colors } from '@/theme/tokens'
+import { colors, normalizeColor } from '@/theme/tokens'
 
 export type TrackerIconName =
   | 'home'
@@ -185,7 +185,8 @@ export function TrackerIcon({
   }
 
   const numericSize = typeof size === 'number' ? size : SIZE_MAP[size] || 22
-  const resolvedColor = (disabled ? colors.textSubtle : color) as string
+  const rawColor = (disabled ? colors.textSubtle : color) as string
+  const resolvedColor = typeof rawColor === 'string' ? normalizeColor(rawColor, colors.text) : rawColor
 
   return (
     <IconComponent

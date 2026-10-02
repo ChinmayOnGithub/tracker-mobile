@@ -2,7 +2,7 @@ import React from 'react'
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { TrackerIcon, type TrackerIconName } from '@/components/TrackerIcon'
 import { resolveSymbol } from '../symbol-registry'
-import { colors, radius } from '@/theme/tokens'
+import { colors, normalizeColor, radius } from '@/theme/tokens'
 
 export interface ActivitySymbolBadgeProps {
   symbol?: string | null
@@ -26,7 +26,7 @@ export function ActivitySymbolBadge({
 }: ActivitySymbolBadgeProps) {
   const resolved = resolveSymbol(symbol)
   const config = SIZE_MAP[size]
-  const accent = color || colors.coral
+  const accent = normalizeColor(color, colors.coral)
 
   return (
     <View

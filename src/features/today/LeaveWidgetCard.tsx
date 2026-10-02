@@ -17,6 +17,9 @@ import { useTheme } from '@/theme/ThemeContext'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { LeaveModal } from '@/features/leave/LeaveModal'
 
+import { fastCache } from '@/utils/dataCache'
+import { appEvents } from '@/utils/events'
+
 interface LeaveWidgetCardProps {
   selectedDate: string
   onLeaveChanged?: () => void
@@ -46,10 +49,18 @@ export function LeaveWidgetCard({ selectedDate, onLeaveChanged }: LeaveWidgetCar
   const [modalVisible, setModalVisible] = useState(false)
 
   const loadData = useCallback(async () => {
+    const cached = fastCache.get<{ allowances: LeaveAllowance[]; records: LeaveRecord[] }>(`leave:${currentYear}`)
+    if (cached) {
+      setAllowances(cached.allowances)
+      setRecords(cached.records)
+      setLoading(false)
+    }
+
     try {
       const res = await trackerApi.getLeaveData(currentYear)
       setAllowances(res.allowances)
       setRecords(res.records)
+      fastCache.set(`leave:${currentYear}`, res)
     } catch {
       // Offline fallback: keep existing state
     } finally {
@@ -59,6 +70,12 @@ export function LeaveWidgetCard({ selectedDate, onLeaveChanged }: LeaveWidgetCar
 
   useEffect(() => {
     void loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    return appEvents.on('leave:changed', () => {
+      void loadData()
+    })
   }, [loadData])
 
   // Compute used by type

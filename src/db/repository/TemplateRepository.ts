@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
 import type { ActivityTemplate } from '@/api/types'
+import { normalizeColor, darkPalette } from '@/theme/tokens'
 
 interface TemplateRow {
   id: string
@@ -21,7 +22,7 @@ function rowToTemplate(r: TemplateRow): ActivityTemplate {
     category: r.category,
     type: r.type,
     icon: r.icon,
-    color: r.color,
+    color: normalizeColor(r.color, darkPalette.coral),
     recurrenceType: r.recurrence_type,
     isActive: r.is_active === 1,
     createdAt: r.created_at,

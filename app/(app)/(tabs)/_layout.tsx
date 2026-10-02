@@ -1,8 +1,17 @@
+import { useEffect } from 'react'
 import { Tabs } from 'expo-router'
+import { useSQLiteContext } from 'expo-sqlite'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { colors } from '@/theme/tokens'
+import { prefetchAppData } from '@/utils/prefetch'
 
 export default function TabsLayout() {
+  const db = useSQLiteContext()
+
+  useEffect(() => {
+    void prefetchAppData(db)
+  }, [db])
+
   return (
     <Tabs
       screenOptions={{

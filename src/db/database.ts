@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
 import type { ActivityLog, ActivityTemplate } from '@/api/types'
+import { normalizeColor, darkPalette } from '@/theme/tokens'
 
 export async function getCachedTemplates(db: SQLiteDatabase): Promise<ActivityTemplate[]> {
   const rows = await db.getAllAsync<{
@@ -21,7 +22,7 @@ export async function getCachedTemplates(db: SQLiteDatabase): Promise<ActivityTe
     category: r.category,
     type: r.type,
     icon: r.icon,
-    color: r.color,
+    color: normalizeColor(r.color, darkPalette.coral),
     recurrenceType: r.recurrence_type,
     isActive: r.is_active === 1,
     createdAt: r.created_at,

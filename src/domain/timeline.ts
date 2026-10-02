@@ -1,4 +1,5 @@
 import type { ActivityLog, ActivityTemplate } from '@/api/client'
+import { normalizeColor } from '@/theme/tokens'
 import {
   addUTCDays,
   analyzeRecurrence,
@@ -118,7 +119,7 @@ export function computeTaskOccurrences(
       postponedLogId,
       priority: ('priority' in template ? (template as Record<string, unknown>).priority : 'NORMAL') as string,
       category: template.category,
-      color: template.color || 'zinc',
+      color: normalizeColor(template.color),
       icon: template.icon || 'activity',
       estimatedDuration: ('estimatedDuration' in template ? Number((template as Record<string, unknown>).estimatedDuration) : 0) || 0,
       isTimed,

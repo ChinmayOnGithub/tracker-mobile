@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -22,9 +22,11 @@ import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { CalendarRepository, type LocalCalendarEvent } from '@/db/repository'
-import { radius, spacing, typography } from '@/theme/tokens'
+import { normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
+import { fastCache } from '@/utils/dataCache'
+import { appEvents } from '@/utils/events'
 
 type CalendarViewMode = 'month' | 'week' | 'day'
 
@@ -70,18 +72,86 @@ export function CalendarScreen() {
 
   const loadData = useCallback(async (isPull = false) => {
     if (isPull) setRefreshing(true)
-    else setLoading(true)
     setError(null)
+
+    // Check fastCache / SQLite first for instant 0ms render
+    let hasLocalData = false
+
+    if (viewMode === 'month') {
+      const monthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+      const cached = fastCache.get<CalendarMonthSummaryDTO[]>(`cal:month:${monthStr}`)
+      if (cached && cached.length > 0) {
+        setMonthSummaries(cached)
+        hasLocalData = true
+        setLoading(false)
+      }
+    } else if (viewMode === 'week') {
+      const startOfWeek = getStartOfWeek(selectedDate)
+      const cached = fastCache.get<CalendarWeekDTO>(`cal:week:${startOfWeek}`)
+      if (cached) {
+        setWeekData(cached)
+        hasLocalData = true
+        setLoading(false)
+      }
+    } else {
+      const cached = fastCache.get<CalendarDayDTO>(`cal:day:${selectedDate}`)
+      if (cached) {
+        setDayData(cached)
+        hasLocalData = true
+        setLoading(false)
+      } else {
+        try {
+          const cachedEvents = await calendarRepo.getByDate(selectedDate)
+          if (cachedEvents.length > 0) {
+            setDayData({
+              date: selectedDate,
+              events: cachedEvents.map((e) => ({
+                id: e.id,
+                title: e.title,
+                start: e.startDate,
+                end: e.endDate,
+                allDay: e.allDay,
+                color: normalizeColor(e.color, colors.sky),
+                type: 'MEETING',
+                trackerArtifactId: e.trackerArtifactId,
+                trackerArtifactType: e.trackerArtifactType,
+                status: e.status,
+                description: e.description,
+              })),
+              tasks: [],
+              workedHours: 0,
+              workStatus: 'cleared',
+              workDetails: null,
+              journalEntry: null,
+              weight: null,
+              habits: [],
+              isLeave: false,
+              leaveDetails: null,
+            })
+            hasLocalData = true
+            setLoading(false)
+          }
+        } catch {
+          // ignore cache read error
+        }
+      }
+    }
+
+    if (!hasLocalData && !isPull) {
+      setLoading(true)
+    }
 
     try {
       if (viewMode === 'month') {
         const monthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
         const res = await trackerApi.getCalendarMonth(monthStr)
         setMonthSummaries(res.summaries || [])
+        fastCache.set(`cal:month:${monthStr}`, res.summaries || [])
       } else if (viewMode === 'week') {
         const startOfWeek = getStartOfWeek(selectedDate)
         const res = await trackerApi.getCalendarWeek(startOfWeek)
         setWeekData(res.week)
+        fastCache.set(`cal:week:${startOfWeek}`, res.week)
 
         // Cache events to SQLite in background
         const now = new Date().toISOString()
@@ -98,7 +168,7 @@ export function CalendarScreen() {
               startDate: ev.start,
               endDate: ev.end,
               allDay: ev.allDay,
-              color: ev.color,
+              color: normalizeColor(ev.color, colors.sky),
               status: ev.status ?? 'confirmed',
               trackerArtifactId: ev.trackerArtifactId,
               trackerArtifactType: ev.trackerArtifactType,
@@ -113,6 +183,7 @@ export function CalendarScreen() {
       } else {
         const res = await trackerApi.getCalendarDay(selectedDate)
         setDayData(res.day)
+        fastCache.set(`cal:day:${selectedDate}`, res.day)
 
         // Cache events to SQLite in background
         const now = new Date().toISOString()
@@ -126,7 +197,7 @@ export function CalendarScreen() {
           startDate: ev.start,
           endDate: ev.end,
           allDay: ev.allDay,
-          color: ev.color,
+          color: normalizeColor(ev.color, colors.sky),
           status: ev.status,
           trackerArtifactId: ev.trackerArtifactId,
           trackerArtifactType: ev.trackerArtifactType,
@@ -151,7 +222,7 @@ export function CalendarScreen() {
                 start: e.startDate,
                 end: e.endDate,
                 allDay: e.allDay,
-                color: e.color,
+                color: normalizeColor(e.color, colors.sky),
                 type: 'MEETING',
                 trackerArtifactId: e.trackerArtifactId,
                 trackerArtifactType: e.trackerArtifactType,
@@ -180,13 +251,20 @@ export function CalendarScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [viewMode, selectedDate, currentYear, currentMonth, calendarRepo])
+  }, [calendarRepo, colors.sky, currentMonth, currentYear, selectedDate, viewMode])
 
   useFocusEffect(
     useCallback(() => {
       void loadData()
     }, [loadData])
   )
+
+  // React to cross-tab calendar & task changes immediately
+  useEffect(() => {
+    return appEvents.on('calendar:changed', () => {
+      void loadData()
+    })
+  }, [loadData])
 
   async function handleGoogleSync() {
     setSyncing(true)

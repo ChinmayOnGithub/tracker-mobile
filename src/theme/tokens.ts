@@ -199,3 +199,52 @@ export const typography = {
 export const layout = {
   minTouchTarget: 48,
 } as const
+
+/**
+ * Normalizes named web colors (e.g. 'zinc', 'blue', 'emerald') or raw hex values
+ * to a concrete, valid #rrggbb hex string supported by React Native and Android RenderNode/Skia.
+ */
+export function normalizeColor(color?: string | null, fallback: string = darkPalette.coral): string {
+  if (!color) return fallback
+  const c = color.trim().toLowerCase()
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c)) return color
+  if (c.startsWith('rgb') || c.startsWith('hsl') || c === 'transparent') return color
+
+  switch (c) {
+    case 'zinc':
+    case 'gray':
+    case 'grey':
+    case 'slate':
+    case 'neutral':
+    case 'stone':
+      return '#94a3b8'
+    case 'red':
+      return '#ef4444'
+    case 'orange':
+    case 'coral':
+      return '#ff7557'
+    case 'amber':
+    case 'yellow':
+      return '#f59e0b'
+    case 'green':
+    case 'emerald':
+      return '#10b981'
+    case 'blue':
+    case 'sky':
+      return '#38bdf8'
+    case 'indigo':
+      return '#6366f1'
+    case 'purple':
+    case 'violet':
+      return '#8b5cf6'
+    case 'pink':
+    case 'rose':
+      return '#ec4899'
+    case 'white':
+      return '#ffffff'
+    case 'black':
+      return '#000000'
+    default:
+      return fallback
+  }
+}

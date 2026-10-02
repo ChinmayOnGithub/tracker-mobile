@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppState,
   type AppStateStatus,
@@ -27,7 +27,7 @@ import {
   TemplateRepository,
   type LocalCalendarEvent,
 } from '@/db/repository'
-import { radius, spacing, typography } from '@/theme/tokens'
+import { normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { getNextActivityStatus, type ActivityStatus } from '@/domain/activity'
@@ -42,6 +42,8 @@ import { JournalWidgetCard } from './JournalWidgetCard'
 import { DailyCodingCard } from './DailyCodingCard'
 import { LeaveWidgetCard } from './LeaveWidgetCard'
 import { MobileCompletionService } from '@/domain/completion'
+import { appEvents } from '@/utils/events'
+import { fastCache } from '@/utils/dataCache'
 
 function generateLocalUuid(): string {
   // Simple RFC4122 v4 UUID generator for local optimistic IDs
@@ -75,27 +77,33 @@ export function TodayScreen() {
   const outboxRepo = useMemo(() => new OutboxRepository(db), [db])
   const calendarRepo = useMemo(() => new CalendarRepository(db), [db])
 
-  // Load flow: SQLite-first (instant render), then server reconciliation in background
+  // Load flow: SQLite-first (instant zero-latency render), then background reconciliation
   const load = useCallback(
     async (isPull = false) => {
       if (isPull) setRefreshing(true)
       setError(null)
 
-      // Step 1: Read local SQLite immediately
+      // Step 1: Read local SQLite immediately for instant render
       try {
         const [cachedT, cachedL, cachedE] = await Promise.all([
           templateRepo.getActiveTemplates(),
           logRepo.getByDate(selectedDate),
           calendarRepo.getByDateRange(selectedDate, selectedDate),
         ])
-        if (cachedT.length > 0 || cachedL.length > 0 || cachedE.length > 0) {
-          setTemplates(cachedT)
-          setLogs(cachedL)
-          setCalendarEvents(cachedE)
-          setLoading(false)
-        }
+        setTemplates(cachedT)
+        setLogs(cachedL)
+        setCalendarEvents(cachedE)
+        // If local data exists or SQLite query finished, unblock screen immediately
+        setLoading(false)
       } catch {
         // SQLite read failed; continue to network attempt
+      }
+
+      // If data for this date was fetched recently and not pull-to-refresh, skip heavy network roundtrip
+      const cacheKey = `today:${selectedDate}`
+      if (!isPull && fastCache.isFresh(cacheKey, 25_000)) {
+        setLoading(false)
+        return
       }
 
       // Step 2: Background reconciliation from Tracker API
@@ -119,7 +127,7 @@ export function TodayScreen() {
           startDate: ev.start,
           endDate: ev.end,
           allDay: ev.allDay,
-          color: ev.color,
+          color: normalizeColor(ev.color, colors.sky),
           status: ev.status ?? 'confirmed',
           trackerArtifactId: ev.trackerArtifactId,
           trackerArtifactType: null,
@@ -137,6 +145,8 @@ export function TodayScreen() {
             ? calendarRepo.upsertEvents(eventsToCache)
             : Promise.resolve(),
         ])
+
+        fastCache.set(cacheKey, true)
 
         // Re-read canonical local SQLite state
         const [freshT, freshL, freshE] = await Promise.all([
@@ -157,8 +167,42 @@ export function TodayScreen() {
         setRefreshing(false)
       }
     },
-    [selectedDate, templateRepo, logRepo, calendarRepo, templates.length, logs.length]
+    [selectedDate, templateRepo, logRepo, calendarRepo]
   )
+
+  // Reactive subscription: auto-refresh when tasks or activities change across tabs/modals
+  useEffect(() => {
+    const unsub1 = appEvents.subscribe('tasks:changed', () => {
+      void (async () => {
+        try {
+          const [freshT, freshL, freshE] = await Promise.all([
+            templateRepo.getActiveTemplates(),
+            logRepo.getByDate(selectedDate),
+            calendarRepo.getByDateRange(selectedDate, selectedDate),
+          ])
+          setTemplates(freshT)
+          setLogs(freshL)
+          setCalendarEvents(freshE)
+        } catch {
+          // ignore
+        }
+      })()
+    })
+    const unsub2 = appEvents.subscribe('activities:changed', () => {
+      void (async () => {
+        try {
+          const freshT = await templateRepo.getActiveTemplates()
+          setTemplates(freshT)
+        } catch {
+          // ignore
+        }
+      })()
+    })
+    return () => {
+      unsub1()
+      unsub2()
+    }
+  }, [templateRepo, logRepo, calendarRepo, selectedDate])
 
   useFocusEffect(
     useCallback(() => {
@@ -205,7 +249,7 @@ export function TodayScreen() {
       category: input.category,
       type: input.type || 'TASK',
       icon: input.icon || 'check',
-      color: input.color || 'blue',
+      color: normalizeColor(input.color, colors.coral),
       recurrenceType: input.recurrenceType,
       isActive: true,
       notes: input.notes ?? null,
@@ -227,6 +271,8 @@ export function TodayScreen() {
     })
 
     setTemplates((prev) => [...prev, optimisticTemplate])
+    appEvents.emit('activities:changed')
+    appEvents.emit('tasks:changed')
 
     try {
       const res = await trackerApi.createTemplate(input)
@@ -278,6 +324,8 @@ export function TodayScreen() {
             )
           })
           setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+          appEvents.emit('tasks:changed')
+          appEvents.emit('calendar:changed')
 
           // Server drain attempt
           try {
@@ -307,6 +355,8 @@ export function TodayScreen() {
             l.id === logIdToUpdate ? { ...l, status: nextStatus, updatedAt: now } : l
           )
         )
+        appEvents.emit('tasks:changed')
+        appEvents.emit('calendar:changed')
 
         // Server drain attempt
         try {
@@ -347,6 +397,8 @@ export function TodayScreen() {
           )
         })
         setLogs((prev) => [...prev, optimisticLog])
+        appEvents.emit('tasks:changed')
+        appEvents.emit('calendar:changed')
 
         // Server drain attempt
         try {
@@ -402,6 +454,8 @@ export function TodayScreen() {
             )
           })
           setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+          appEvents.emit('tasks:changed')
+          appEvents.emit('calendar:changed')
 
           try {
             await trackerApi.deleteLog(logIdToDelete)
@@ -445,6 +499,8 @@ export function TodayScreen() {
               : l
           )
         )
+        appEvents.emit('tasks:changed')
+        appEvents.emit('calendar:changed')
 
         try {
           const res = await trackerApi.updateLog(logIdToUpdate, {
@@ -490,6 +546,8 @@ export function TodayScreen() {
           )
         })
         setLogs((prev) => [...prev, optimisticLog])
+        appEvents.emit('tasks:changed')
+        appEvents.emit('calendar:changed')
 
         try {
           const res = await trackerApi.createLog({
@@ -532,6 +590,8 @@ export function TodayScreen() {
         )
       })
       setLogs((prev) => prev.filter((l) => l.id !== logId))
+      appEvents.emit('tasks:changed')
+      appEvents.emit('calendar:changed')
 
       try {
         await trackerApi.deleteLog(logId)
@@ -564,6 +624,8 @@ export function TodayScreen() {
         )
       })
       setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+      appEvents.emit('tasks:changed')
+      appEvents.emit('calendar:changed')
 
       try {
         await trackerApi.deleteLog(logIdToDelete)

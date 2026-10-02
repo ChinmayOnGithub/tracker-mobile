@@ -7,6 +7,8 @@ import { TrackerIcon } from '@/components/TrackerIcon'
 import { trackerApi, type WeightRecord } from '@/api/client'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
+import { fastCache } from '@/utils/dataCache'
+import { appEvents } from '@/utils/events'
 
 interface WeightWidgetCardProps {
   date: string
@@ -26,9 +28,17 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
   const [error, setError] = useState<string | null>(null)
 
   const loadWeight = useCallback(async () => {
+    const cached = fastCache.get<WeightRecord[]>('weight_history:7')
+    if (cached) {
+      setRecords(cached)
+      setLoading(false)
+    }
+
     try {
       const res = await trackerApi.getWeightHistory(7)
-      setRecords(res.records || [])
+      const list = res.records || []
+      setRecords(list)
+      fastCache.set('weight_history:7', list)
     } catch {
       // Handled silently
     } finally {
@@ -37,23 +47,14 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
   }, [])
 
   useEffect(() => {
-    let mounted = true
-    trackerApi.getWeightHistory(7)
-      .then((res) => {
-        if (mounted) {
-          setRecords(res.records || [])
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setLoading(false)
-        }
-      })
-    return () => {
-      mounted = false
-    }
-  }, [])
+    void loadWeight()
+  }, [loadWeight])
+
+  useEffect(() => {
+    return appEvents.on('weight:changed', () => {
+      void loadWeight()
+    })
+  }, [loadWeight])
 
   const latestRecord = records[records.length - 1] || null
   const firstRecord = records.length > 1 ? records[0] : null
@@ -79,6 +80,7 @@ export function WeightWidgetCard({ date, onWeightLogged }: WeightWidgetCardProps
       setModalOpen(false)
       setWeightInput('')
       setNotesInput('')
+      appEvents.emit('weight:changed')
       await loadWeight()
       onWeightLogged?.()
     } catch (err) {

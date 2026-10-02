@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { normalizeColor, darkPalette } from '@/theme/tokens'
 
 export interface LocalCalendarEvent {
   id: string
@@ -51,7 +52,7 @@ function rowToEvent(r: CalendarEventRow): LocalCalendarEvent {
     startDate: r.start_date,
     endDate: r.end_date,
     allDay: r.all_day === 1,
-    color: r.color,
+    color: normalizeColor(r.color, darkPalette.sky),
     status: r.status,
     trackerArtifactId: r.tracker_artifact_id,
     trackerArtifactType: r.tracker_artifact_type,

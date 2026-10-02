@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { colors, layout, radius, spacing, typography } from '@/theme/tokens'
+import { colors, layout, normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 
 describe('Design Tokens', () => {
   it('defines valid hex/rgba values for core semantic palette', () => {
@@ -36,5 +36,16 @@ describe('Design Tokens', () => {
     expect(radius.md).toBeLessThan(radius.lg)
     expect(typography.xs.fontSize).toBeLessThan(typography.sm.fontSize)
     expect(typography.sm.fontSize).toBeLessThan(typography.base.fontSize)
+  })
+
+  it('normalizes named colors and web zinc to valid hex codes', () => {
+    expect(normalizeColor('zinc')).toBe('#94a3b8')
+    expect(normalizeColor('gray')).toBe('#94a3b8')
+    expect(normalizeColor('slate')).toBe('#94a3b8')
+    expect(normalizeColor('blue')).toBe('#38bdf8')
+    expect(normalizeColor('emerald')).toBe('#10b981')
+    expect(normalizeColor('#ff00aa')).toBe('#ff00aa')
+    expect(normalizeColor(null)).toBe(colors.coral)
+    expect(normalizeColor(undefined)).toBe(colors.coral)
   })
 })

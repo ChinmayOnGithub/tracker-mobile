@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Modal,
@@ -21,6 +21,8 @@ import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
+import { fastCache } from '@/utils/dataCache'
+import { appEvents } from '@/utils/events'
 import { fmtRelativeTime } from '@/utils/date'
 import {
   countChars,
@@ -51,14 +53,31 @@ export function NotesScreen() {
 
   const loadNotes = useCallback(async (isPull = false) => {
     if (isPull) setRefreshing(true)
-    else setLoading(true)
     setError(null)
+
+    // Check fastCache first for instant 0ms render
+    const cached = fastCache.get<NoteItem[]>('notes')
+    if (cached && cached.length > 0) {
+      setNotes(cached)
+      setLoading(false)
+    } else if (!isPull) {
+      setLoading(true)
+    }
+
+    if (!isPull && fastCache.isFresh('notes')) {
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
 
     try {
       const res = await trackerApi.getNotes()
       setNotes(res.notes)
+      fastCache.set('notes', res.notes)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load notes.')
+      if (!cached || cached.length === 0) {
+        setError(err instanceof Error ? err.message : 'Unable to load notes.')
+      }
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -70,6 +89,12 @@ export function NotesScreen() {
       void loadNotes()
     }, [loadNotes])
   )
+
+  useEffect(() => {
+    return appEvents.on('notes:changed', () => {
+      void loadNotes()
+    })
+  }, [loadNotes])
 
   const openCreateModal = () => {
     setEditingNote(null)
@@ -102,10 +127,15 @@ export function NotesScreen() {
         setNotes((prev) =>
           prev.map((n) => (n.id === editingNote.id ? res.note : n))
         )
+        fastCache.set('notes', (prevNotes: NoteItem[] = []) =>
+          prevNotes.map((n) => (n.id === editingNote.id ? res.note : n))
+        )
       } else {
         const res = await trackerApi.createNote(formContent, formTitle)
         setNotes((prev) => [res.note, ...prev])
+        fastCache.set('notes', (prevNotes: NoteItem[] = []) => [res.note, ...prevNotes])
       }
+      appEvents.emit('notes:changed')
       setModalVisible(false)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to save note.')
@@ -127,6 +157,10 @@ export function NotesScreen() {
             try {
               await trackerApi.deleteNote(id)
               setNotes((prev) => prev.filter((n) => n.id !== id))
+              fastCache.set('notes', (prevNotes: NoteItem[] = []) =>
+                prevNotes.filter((n) => n.id !== id)
+              )
+              appEvents.emit('notes:changed')
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete note.')
             }

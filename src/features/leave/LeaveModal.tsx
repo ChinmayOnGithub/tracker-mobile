@@ -21,6 +21,7 @@ import { TrackerIcon } from '@/components/TrackerIcon'
 import { useTheme } from '@/theme/ThemeContext'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { addDays, todayYmd } from '@/utils/date'
+import { appEvents } from '@/utils/events'
 
 interface LeaveModalProps {
   visible: boolean
@@ -155,6 +156,7 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
       setNotes('')
       await loadData()
       setTab('history')
+      appEvents.emit('leave:changed')
       onLeaveChanged?.()
     } catch (err) {
       Alert.alert('Request Failed', err instanceof Error ? err.message : 'Could not create leave request.')
@@ -177,6 +179,7 @@ export function LeaveModal({ visible, onClose, onLeaveChanged }: LeaveModalProps
               await trackerApi.deleteLeaveRequest(id)
               setRecords((prev) => prev.filter((r) => r.id !== id))
               await loadData()
+              appEvents.emit('leave:changed')
               onLeaveChanged?.()
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete record.')
