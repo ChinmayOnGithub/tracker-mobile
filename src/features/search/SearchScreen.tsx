@@ -8,6 +8,7 @@ import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
+import { measureAsync } from '@/utils/performance'
 
 const SEARCH_DEBOUNCE_MS = 150
 
@@ -86,7 +87,7 @@ export function SearchScreen() {
     setSearching(true)
 
     const timer = setTimeout(() => {
-      void repository.search(trimmed, 50).then((next) => {
+      void measureAsync('search:local', () => repository.search(trimmed, 50)).then((next) => {
         if (id !== requestId.current) return
         setResults(next)
         setSearching(false)
