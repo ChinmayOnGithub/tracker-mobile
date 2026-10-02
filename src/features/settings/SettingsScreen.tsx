@@ -312,6 +312,30 @@ export function SettingsScreen() {
         </View>
       </Card>
 
+      {/* Secure Vault Card */}
+      <Card style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={styles.iconHeadingWrap}>
+            <View style={[styles.vaultIconWrap, { backgroundColor: colors.indigoSubtle }]}>
+              <TrackerIcon name="lock" size="sm" color={colors.indigo} />
+            </View>
+            <View style={styles.binCopyWrap}>
+              <Text style={[styles.cardHeading, { color: colors.text }]}>Secure Vault</Text>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
+                Encrypted files, private documents, and folder management.
+              </Text>
+            </View>
+          </View>
+          <Button
+            label="Open"
+            variant="outline"
+            size="sm"
+            onPress={() => router.push('/(app)/vault')}
+            accessibilityLabel="Open Secure Vault"
+          />
+        </View>
+      </Card>
+
       {/* Bin / Data Recovery Card */}
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
@@ -322,7 +346,7 @@ export function SettingsScreen() {
             <View style={styles.binCopyWrap}>
               <Text style={[styles.cardHeading, { color: colors.text }]}>Bin / Recovery</Text>
               <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
-                Recover soft-deleted journals, habits, notes, and weight records.
+                Recover soft-deleted journals, habits, notes, vault files, and weight records.
               </Text>
             </View>
           </View>
@@ -439,6 +463,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   leaveIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vaultIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,

@@ -20,6 +20,8 @@ import {
   FileText,
   Filter,
   Flame,
+  Folder,
+  FolderPlus,
   Heart,
   Home,
   Link as LinkIcon,
@@ -63,6 +65,8 @@ export type TrackerIconName =
   | 'link'
   | 'vault'
   | 'shield'
+  | 'folder'
+  | 'folder-plus'
   | 'trash'
   | 'delete'
   | 'settings'
@@ -117,6 +121,8 @@ const ICON_REGISTRY: Record<TrackerIconName, LucideIcon> = {
   link: LinkIcon,
   vault: Shield,
   shield: Shield,
+  folder: Folder,
+  'folder-plus': FolderPlus,
   trash: Trash2,
   delete: Trash2,
   settings: Settings,

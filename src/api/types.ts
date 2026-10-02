@@ -160,7 +160,7 @@ export interface NoteItem {
   updatedAt?: string
 }
 
-export type BinEntityType = 'journal' | 'note' | 'activity_template' | 'weight' | 'leave'
+export type BinEntityType = 'journal' | 'note' | 'activity_template' | 'weight' | 'leave' | 'vault'
 
 export interface BinItem {
   id: string
@@ -168,6 +168,27 @@ export interface BinItem {
   title: string
   preview?: string | null
   deletedAt: string
+}
+
+export interface VaultItem {
+  id: string
+  name: string
+  title?: string
+  searchName?: string | null
+  mimeGroup?: string | null
+  extension?: string | null
+  fileSize?: number | null
+  isFolder: boolean
+  isFavorite: boolean
+  parentId?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface VaultBreadcrumb {
+  id: string | null
+  name: string
+  title?: string
 }
 
 export type OnboardingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'

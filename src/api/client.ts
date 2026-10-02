@@ -514,5 +514,28 @@ export const trackerApi = {
   async getBilling() {
     return performFetch<import('./types').BillingEntitlementsResponse>('/api/mobile/v1/billing')
   },
+
+  async getVaultItems(parentId?: string | null) {
+    const q = parentId ? `?parentId=${encodeURIComponent(parentId)}` : ''
+    return performFetch<{
+      items: import('./types').VaultItem[]
+      breadcrumbs: import('./types').VaultBreadcrumb[]
+    }>(`/api/mobile/v1/vault${q}`)
+  },
+
+  async createVaultFolder(name: string, parentId?: string | null) {
+    return performFetch<{ item: import('./types').VaultItem }>('/api/mobile/v1/vault', {
+      method: 'POST',
+      body: JSON.stringify({ name, parentId }),
+      retries: 0,
+    })
+  },
+
+  async deleteVaultItem(id: string) {
+    return performFetch<{ deleted: boolean; id: string }>(
+      `/api/mobile/v1/vault?id=${encodeURIComponent(id)}`,
+      { method: 'DELETE', retries: 0 }
+    )
+  },
 }
 export * from './types'
