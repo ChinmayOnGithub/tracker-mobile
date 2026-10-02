@@ -178,17 +178,45 @@ export class LogRepository {
     payload?: unknown
   ): Promise<void> {
     const now = new Date().toISOString()
-    if (amount !== undefined || payload !== undefined) {
-      await this.db.runAsync(
-        'UPDATE activity_log SET status = ?, amount = ?, payload_json = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
-        [status, amount ?? null, payload ? JSON.stringify(payload) : null, now, id]
+
+    await this.db.withTransactionAsync(async () => {
+      if (amount !== undefined || payload !== undefined) {
+        await this.db.runAsync(
+          'UPDATE activity_log SET status = ?, amount = ?, payload_json = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
+          [status, amount ?? null, payload ? JSON.stringify(payload) : null, now, id]
+        )
+      } else {
+        await this.db.runAsync(
+          'UPDATE activity_log SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
+          [status, now, id]
+        )
+      }
+
+      const row = await this.db.getFirstAsync<{
+        note: string | null
+        payload_json: string | null
+      }>(
+        'SELECT note, payload_json FROM activity_log WHERE id = ? AND deleted_at IS NULL;',
+        [id]
       )
-    } else {
-      await this.db.runAsync(
-        'UPDATE activity_log SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
-        [status, now, id]
-      )
-    }
+
+      if (row) {
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['activity_log', id]
+        )
+        await this.db.runAsync(
+          'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+          [
+            'activity_log',
+            id,
+            row.note ?? status,
+            [status, row.note ?? '', row.payload_json ?? ''].join(' '),
+            now,
+          ]
+        )
+      }
+    })
   }
 
   /**
