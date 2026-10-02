@@ -225,13 +225,7 @@ export function SettingsScreen() {
             label="Upgrade to Pro"
             variant="primary"
             size="sm"
-            onPress={() => {
-              Alert.alert(
-                'Tracker Pro',
-                'Tracker Pro unlocks 24+ custom activity symbols, unlimited notes, bi-directional Google Calendar sync, and advanced analytics.\n\nVisit tracker.app/billing or upgrade from the web dashboard.',
-                [{ text: 'OK' }]
-              )
-            }}
+            onPress={() => router.push('/(app)/billing')}
             accessibilityLabel="Upgrade to Tracker Pro"
           />
         )}
