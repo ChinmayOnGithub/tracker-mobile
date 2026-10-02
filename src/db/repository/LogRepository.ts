@@ -133,22 +133,38 @@ export class LogRepository {
    * Uses a client-generated id (UUID v4). The outbox will reconcile with server.
    */
   async optimisticCreate(log: ActivityLog): Promise<void> {
-    await this.db.runAsync(
-      `INSERT OR REPLACE INTO activity_log (
-        id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-      [
-        log.id,
-        log.activityId,
-        log.date,
-        log.status,
-        log.note ?? null,
-        log.amount ?? null,
-        log.payload ? JSON.stringify(log.payload) : null,
-        log.createdAt,
-        log.updatedAt,
-      ]
-    )
+    await this.db.withTransactionAsync(async () => {
+      await this.db.runAsync(
+        `INSERT OR REPLACE INTO activity_log (
+          id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          log.id,
+          log.activityId,
+          log.date,
+          log.status,
+          log.note ?? null,
+          log.amount ?? null,
+          log.payload ? JSON.stringify(log.payload) : null,
+          log.createdAt,
+          log.updatedAt,
+        ]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['activity_log', log.id]
+      )
+      await this.db.runAsync(
+        'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+        [
+          'activity_log',
+          log.id,
+          log.note ?? log.status,
+          [log.status, log.note ?? '', log.payload ? JSON.stringify(log.payload) : ''].join(' '),
+          log.updatedAt,
+        ]
+      )
+    })
   }
 
   /**
