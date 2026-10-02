@@ -74,7 +74,7 @@ async function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function performFetch<T>(
+async function performFetchUnshared<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
@@ -107,23 +107,13 @@ async function performFetch<T>(
     const timer = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
-      const requestKey =
-        (!rest.method || rest.method === 'GET')
-          ? `GET:${url}:${headers.get('Authorization') ?? ''}`
-          : null
-
-      const doFetch = () =>
-        measureAsync(`api:${rest.method ?? 'GET'}:${path}`, () =>
-          fetch(url, {
-            ...rest,
-            headers,
-            signal: controller.signal,
-          })
-        )
-
-      const response = requestKey
-        ? await dedupeRequest(requestKey, doFetch)
-        : await doFetch()
+      const response = await measureAsync(`api:${rest.method ?? 'GET'}:${path}`, () =>
+        fetch(url, {
+          ...rest,
+          headers,
+          signal: controller.signal,
+        })
+      )
 
       clearTimeout(timer)
 
@@ -207,6 +197,25 @@ async function performFetch<T>(
   }
 
   throw new ApiError('Unable to connect to Tracker server', 'NETWORK_UNAVAILABLE')
+}
+
+async function performFetch<T>(
+  path: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const method = options.method ?? 'GET'
+  if (method === 'GET') {
+    const authenticated = options.authenticated ?? true
+    const token = authenticated ? await getToken() : null
+    const key = `GET:${config.apiUrl}${path}:${token ?? ''}`
+
+    // Deduplicate the entire logical request, including response parsing and
+    // retries. Deduplicating only fetch() is unsafe because Response bodies
+    // are single-consumption objects.
+    return dedupeRequest(key, () => performFetchUnshared<T>(path, options))
+  }
+
+  return performFetchUnshared<T>(path, options)
 }
 
 export const trackerApi = {
