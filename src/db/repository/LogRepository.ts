@@ -9,6 +9,7 @@ interface LogRow {
   note: string | null
   amount: number | null
   payload_json: string | null
+  version?: number
   created_at: string
   updated_at: string
 }
@@ -22,6 +23,7 @@ function rowToLog(r: LogRow): ActivityLog {
     note: r.note,
     amount: r.amount,
     payload: r.payload_json ? (JSON.parse(r.payload_json) as unknown) : undefined,
+    version: r.version ?? 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -80,6 +82,7 @@ export class LogRepository {
   /**
    * Upsert a batch of logs from a server response.
    * INSERT OR REPLACE keeps SQLite in sync with server state.
+   * Version-aware: ignores updates where incoming.version <= local.version (#186).
    * Clears tombstones for restored entities.
    */
   async upsertFromServer(logs: ActivityLog[]): Promise<void> {
@@ -87,10 +90,21 @@ export class LogRepository {
 
     await this.db.withTransactionAsync(async () => {
       for (const log of logs) {
+        // Version-aware check (#186): if incoming.version <= local.version, ignore
+        const existing = await this.db.getFirstAsync<{ version: number }>(
+          'SELECT version FROM activity_log WHERE id = ?;',
+          [log.id]
+        )
+        if (existing && log.version !== undefined && log.version <= (existing.version || 0)) {
+          continue
+        }
+
+        const logVersion = log.version ?? 1
+
         await this.db.runAsync(
           `INSERT OR REPLACE INTO activity_log (
-            id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            id, activity_id, date, status, note, amount, payload_json, version, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             log.id,
             log.activityId,
@@ -99,6 +113,7 @@ export class LogRepository {
             log.note ?? null,
             log.amount ?? null,
             log.payload ? JSON.stringify(log.payload) : null,
+            logVersion,
             log.createdAt,
             log.updatedAt,
           ]

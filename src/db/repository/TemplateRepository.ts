@@ -11,6 +11,7 @@ interface TemplateRow {
   color: string
   recurrence_type: string
   is_active: number
+  version?: number
   created_at: string
   updated_at: string
 }
@@ -25,6 +26,7 @@ function rowToTemplate(r: TemplateRow): ActivityTemplate {
     color: normalizeColor(r.color, darkPalette.coral),
     recurrenceType: r.recurrence_type,
     isActive: r.is_active === 1,
+    version: r.version ?? 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }
@@ -68,6 +70,7 @@ export class TemplateRepository {
   /**
    * Upsert a batch of templates from a server response.
    * INSERT OR REPLACE keeps SQLite in sync with server state.
+   * Version-aware: ignores updates where incoming.version <= local.version (#186).
    * Clears tombstones for restored entities.
    */
   async upsertFromServer(templates: ActivityTemplate[]): Promise<void> {
@@ -75,11 +78,22 @@ export class TemplateRepository {
 
     await this.db.withTransactionAsync(async () => {
       for (const t of templates) {
+        // Version-aware check (#186): if incoming.version <= local.version, ignore
+        const existing = await this.db.getFirstAsync<{ version: number }>(
+          'SELECT version FROM activity_template WHERE id = ?;',
+          [t.id]
+        )
+        if (existing && t.version !== undefined && t.version <= (existing.version || 0)) {
+          continue
+        }
+
+        const templateVersion = t.version ?? 1
+
         await this.db.runAsync(
           `INSERT OR REPLACE INTO activity_template (
             id, name, category, type, icon, color, recurrence_type,
-            is_active, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            is_active, version, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             t.id,
             t.name,
@@ -89,6 +103,7 @@ export class TemplateRepository {
             t.color,
             t.recurrenceType,
             t.isActive ? 1 : 0,
+            templateVersion,
             t.createdAt,
             t.updatedAt,
           ]

@@ -88,7 +88,7 @@ async function performFetch<T>(
   const headers = new Headers(customHeaders)
   headers.set('Accept', 'application/json')
 
-  if (rest.body && !headers.has('Content-Type')) {
+  if (rest.body && !headers.has('Content-Type') && !(typeof FormData !== 'undefined' && rest.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -166,7 +166,9 @@ async function performFetch<T>(
         )
       }
 
-      return payload.data
+      return (payload && typeof payload === 'object' && 'data' in payload
+        ? (payload as { data: T }).data
+        : (payload as unknown as T))
     } catch (err: unknown) {
       clearTimeout(timer)
 
@@ -263,6 +265,25 @@ export const trackerApi = {
   async deleteLog(id: string) {
     return performFetch<{ deleted: boolean; id: string }>(
       `/api/mobile/v1/activities/logs/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
+        retries: 0,
+      }
+    )
+  },
+
+  async postponeTask(templateId: string, currentDate: string, existingLogId?: string | null) {
+    return performFetch<{ nextDate: string }>('/api/mobile/v1/activities/logs/postpone', {
+      method: 'POST',
+      body: JSON.stringify({ templateId, currentDate, existingLogId }),
+      retries: 0,
+    })
+  },
+
+  async unpostponeTask(templateId: string, logId: string, originalDate: string) {
+    const params = new URLSearchParams({ templateId, logId, originalDate })
+    return performFetch<{ restored: boolean }>(
+      `/api/mobile/v1/activities/logs/postpone?${params.toString()}`,
       {
         method: 'DELETE',
         retries: 0,
@@ -536,6 +557,18 @@ export const trackerApi = {
       `/api/mobile/v1/vault?id=${encodeURIComponent(id)}`,
       { method: 'DELETE', retries: 0 }
     )
+  },
+
+  async uploadVaultFile(formData: FormData) {
+    return performFetch<{ success: boolean; document: import('./types').VaultItem }>('/api/vault/upload', {
+      method: 'POST',
+      body: formData,
+      retries: 0,
+    })
+  },
+
+  getVaultDownloadUrl(id: string): string {
+    return `${config.apiUrl}/api/vault/download/${encodeURIComponent(id)}`
   },
 }
 export * from './types'

@@ -439,6 +439,30 @@ export function TodayScreen() {
     const outboxId = generateLocalUuid()
 
     try {
+      // Special handling for postpone: updates template targetDate + creates postponed log
+      if (targetStatus === 'postponed') {
+        try {
+          const result = await trackerApi.postponeTask(
+            task.templateId,
+            selectedDate,
+            task.logId || null
+          )
+          // Refresh to get updated template targetDate and new/updated log
+          await load()
+          appEvents.emit('tasks:changed')
+          appEvents.emit('activities:changed')
+          appEvents.emit('calendar:changed')
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to postpone task.'
+          )
+        } finally {
+          inFlightMutationRef.current.delete(lockKey)
+          setTogglingId(null)
+        }
+        return
+      }
+
       if (targetStatus === 'cleared') {
         if (task.logId) {
           const logIdToDelete = task.logId
@@ -606,33 +630,19 @@ export function TodayScreen() {
 
   // Re-postpone: revert a task that was postponed to today back to its previous day
   const handleRePostpone = async (task: TaskOccurrence) => {
-    if (!task.postponedLogId) return
-    const logIdToDelete = task.postponedLogId
-    const mutationId = generateLocalUuid()
-    const outboxId = generateLocalUuid()
+    if (!task.postponedLogId || !task.postponedFromDate) return
 
     try {
-      await db.withTransactionAsync(async () => {
-        await logRepo.markDeleted(logIdToDelete)
-        await outboxRepo.enqueue(
-          outboxId,
-          mutationId,
-          'activity_log',
-          logIdToDelete,
-          'delete_log',
-          { id: logIdToDelete }
-        )
-      })
-      setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+      await trackerApi.unpostponeTask(
+        task.templateId,
+        task.postponedLogId,
+        task.postponedFromDate
+      )
+      // Refresh to get updated template targetDate and removed log
+      await load()
       appEvents.emit('tasks:changed')
+      appEvents.emit('activities:changed')
       appEvents.emit('calendar:changed')
-
-      try {
-        await trackerApi.deleteLog(logIdToDelete)
-        await outboxRepo.markDone(outboxId)
-      } catch {
-        await outboxRepo.markFailed(outboxId, 'Network request failed during re-postpone')
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to re-postpone task.')
     }
