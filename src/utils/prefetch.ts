@@ -13,10 +13,81 @@ function later(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function prefetchTemplates(repo: TemplateRepository): Promise<void> {
+  if (fastCache.isFresh('templates', CACHE_TTL_MS)) return
+  try {
+    const response = await trackerApi.getTemplates()
+    if (!response.templates) return
+    await repo.upsertFromServer(response.templates)
+    fastCache.set('templates', response.templates, CACHE_TTL_MS)
+  } catch {
+    // Prefetch is opportunistic.
+  }
+}
+
+async function prefetchLogs(repo: LogRepository, date: string): Promise<void> {
+  const key = `logs:${date}`
+  if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+  try {
+    const response = await trackerApi.getLogs(date)
+    if (!response.logs) return
+    await repo.upsertFromServer(response.logs)
+    fastCache.set(key, response.logs, CACHE_TTL_MS)
+  } catch {
+    // Prefetch is opportunistic.
+  }
+}
+
+async function prefetchCalendar(month: string): Promise<void> {
+  const key = `cal:month:${month}`
+  if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+  try {
+    const response = await trackerApi.getCalendarMonth(month)
+    if (response.summaries) fastCache.set(key, response.summaries, CACHE_TTL_MS)
+  } catch {
+    // Prefetch is opportunistic.
+  }
+}
+
+async function prefetchSecondary(year: number): Promise<void> {
+  await later(LOW_PRIORITY_DELAY_MS)
+
+  await Promise.allSettled([
+    (async () => {
+      if (fastCache.isFresh('notes', CACHE_TTL_MS)) return
+      try {
+        const response = await trackerApi.getNotes()
+        if (response.notes) fastCache.set('notes', response.notes, CACHE_TTL_MS)
+      } catch {
+        // Prefetch is opportunistic.
+      }
+    })(),
+    (async () => {
+      const key = `leave:${year}`
+      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+      try {
+        const response = await trackerApi.getLeaveData(year)
+        fastCache.set(key, response, CACHE_TTL_MS)
+      } catch {
+        // Prefetch is opportunistic.
+      }
+    })(),
+    (async () => {
+      const key = 'weight_history:7'
+      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
+      try {
+        const response = await trackerApi.getWeightHistory(7)
+        if (response.records) fastCache.set(key, response.records, CACHE_TTL_MS)
+      } catch {
+        // Prefetch is opportunistic.
+      }
+    })(),
+  ])
+}
+
 /**
  * Warms the local-first data path without making startup depend on a large
- * burst of network requests. Critical data is fetched first; secondary data
- * is intentionally deferred.
+ * network burst. Critical data is fetched first; secondary data is delayed.
  *
  * The UI should never await this function.
  */
@@ -32,84 +103,16 @@ export async function prefetchAppData(db: SQLiteDatabase): Promise<void> {
     const templateRepo = new TemplateRepository(db)
     const logRepo = new LogRepository(db)
 
-    // Critical warm-up: run independently so one slow endpoint never delays
-    // the cache population of the others.
-    void (async () => {
-      if (fastCache.isFresh('templates', CACHE_TTL_MS)) return
-      try {
-        const response = await trackerApi.getTemplates()
-        if (!response.templates) return
-        await templateRepo.upsertFromServer(response.templates)
-        fastCache.set('templates', response.templates, CACHE_TTL_MS)
-      } catch {
-        // Prefetch is opportunistic.
-      }
-    })()
+    await Promise.allSettled([
+      prefetchTemplates(templateRepo),
+      prefetchLogs(logRepo, today),
+      prefetchCalendar(monthStr),
+    ])
 
-    void (async () => {
-      const key = `logs:${today}`
-      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
-      try {
-        const response = await trackerApi.getLogs(today)
-        if (!response.logs) return
-        await logRepo.upsertFromServer(response.logs)
-        fastCache.set(key, response.logs, CACHE_TTL_MS)
-      } catch {
-        // Prefetch is opportunistic.
-      }
-    })()
-
-    void (async () => {
-      const key = `cal:month:${monthStr}`
-      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
-      try {
-        const response = await trackerApi.getCalendarMonth(monthStr)
-        if (response.summaries) {
-          fastCache.set(key, response.summaries, CACHE_TTL_MS)
-        }
-      } catch {
-        // Prefetch is opportunistic.
-      }
-    })()
-
-    // Secondary data is deliberately delayed so opening the app does not
-    // compete with the first interactive render.
-    await later(LOW_PRIORITY_DELAY_MS)
-
-    void (async () => {
-      if (fastCache.isFresh('notes', CACHE_TTL_MS)) return
-      try {
-        const response = await trackerApi.getNotes()
-        if (response.notes) fastCache.set('notes', response.notes, CACHE_TTL_MS)
-      } catch {
-        // Prefetch is opportunistic.
-      }
-    })()
-
-    void (async () => {
-      const key = `leave:${currentYear}`
-      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
-      try {
-        const response = await trackerApi.getLeaveData(currentYear)
-        fastCache.set(key, response, CACHE_TTL_MS)
-      } catch {
-        // Prefetch is opportunistic.
-      }
-    })()
-
-    void (async () => {
-      const key = 'weight_history:7'
-      if (fastCache.isFresh(key, CACHE_TTL_MS)) return
-      try {
-        const response = await trackerApi.getWeightHistory(7)
-        if (response.records) fastCache.set(key, response.records, CACHE_TTL_MS)
-      } catch {
-        // Prefetch is opportunistic.
-      }
-    })()
+    await prefetchSecondary(currentYear)
   } finally {
-    // The function only schedules work; do not keep the global guard held
-    // while low-priority requests are running.
+    // Keep the guard held until every scheduled request finishes so a second
+    // mount cannot create another overlapping prefetch burst.
     isPrefetching = false
   }
 }
