@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSQLiteContext } from 'expo-sqlite'
@@ -9,10 +9,11 @@ import { TrackerIcon } from '@/components/TrackerIcon'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 import { measureAsync } from '@/utils/performance'
+import { fastCache } from '@/utils/dataCache'
 
 const SEARCH_DEBOUNCE_MS = 150
 
-const SearchRow = ({ item, onPress }: { item: SearchResult; onPress: (item: SearchResult) => void }) => {
+const SearchRow = memo(function SearchRow({ item, onPress }: { item: SearchResult; onPress: (item: SearchResult) => void }) {
   const { colors } = useTheme()
 
   return (
@@ -38,7 +39,7 @@ const SearchRow = ({ item, onPress }: { item: SearchResult; onPress: (item: Sear
       </View>
     </Pressable>
   )
-}
+})
 
 export function SearchScreen() {
   const db = useSQLiteContext()
@@ -84,16 +85,26 @@ export function SearchScreen() {
     }
 
     const id = ++requestId.current
-    setSearching(true)
+    const cacheKey = `search:${trimmed.toLocaleLowerCase()}`
+    const cached = fastCache.peek<SearchResult[]>(cacheKey)
+
+    if (cached) {
+      setResults(cached)
+      setSearching(false)
+    } else {
+      setSearching(true)
+    }
 
     const timer = setTimeout(() => {
       void measureAsync('search:local', () => repository.search(trimmed, 50)).then((next) => {
         if (id !== requestId.current) return
+        fastCache.set(cacheKey, next, 30_000)
         setResults(next)
         setSearching(false)
       }).catch(() => {
         if (id === requestId.current) {
-          setResults([])
+          // Preserve a valid cached result when a refresh fails.
+          if (!cached) setResults([])
           setSearching(false)
         }
       })
