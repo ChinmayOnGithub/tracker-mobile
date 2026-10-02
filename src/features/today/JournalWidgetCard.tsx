@@ -10,23 +10,28 @@ import { router } from 'expo-router'
 import { trackerApi, type JournalEntry } from '@/api/client'
 import { Card } from '@/components/Card'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { useTheme } from '@/theme/ThemeContext'
+import { radius, spacing, typography } from '@/theme/tokens'
 
 interface JournalWidgetCardProps {
   date: string
 }
 
-const MOOD_EMOJIS: Record<string, { emoji: string; label: string; color: string }> = {
-  great: { emoji: '😄', label: 'Great', color: colors.emerald },
-  good: { emoji: '🙂', label: 'Good', color: colors.sky },
-  okay: { emoji: '😐', label: 'Okay', color: colors.purple },
-  low: { emoji: '😔', label: 'Low', color: colors.amber },
-  tough: { emoji: '😫', label: 'Tough', color: colors.danger },
-}
-
 export function JournalWidgetCard({ date }: JournalWidgetCardProps) {
+  const { colors } = useTheme()
+  
+  const MOOD_EMOJIS: Record<string, { emoji: string; label: string; color: string }> = {
+    great: { emoji: '😄', label: 'Great', color: colors.emerald },
+    good: { emoji: '🙂', label: 'Good', color: colors.sky },
+    okay: { emoji: '😐', label: 'Okay', color: colors.purple },
+    low: { emoji: '😔', label: 'Low', color: colors.amber },
+    tough: { emoji: '😫', label: 'Tough', color: colors.danger },
+  }
+  
   const [entry, setEntry] = useState<JournalEntry | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const styles = React.useMemo(() => createStyles(colors), [colors])
 
   useEffect(() => {
     let isCurrent = true
@@ -110,7 +115,7 @@ export function JournalWidgetCard({ date }: JournalWidgetCardProps) {
   )
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   card: {
     padding: 0,
     overflow: 'hidden',
@@ -133,7 +138,8 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    backgroundColor: colors.purple,
+    opacity: 0.12,
     alignItems: 'center',
     justifyContent: 'center',
   },
