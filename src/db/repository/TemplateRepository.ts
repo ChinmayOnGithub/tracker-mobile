@@ -76,10 +76,21 @@ export class TemplateRepository {
     await this.db.withTransactionAsync(async () => {
       for (const t of templates) {
         await this.db.runAsync(
-          `INSERT OR REPLACE INTO activity_template (
+          `INSERT INTO activity_template (
             id, name, category, type, icon, color, recurrence_type,
             is_active, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            category = excluded.category,
+            type = excluded.type,
+            icon = excluded.icon,
+            color = excluded.color,
+            recurrence_type = excluded.recurrence_type,
+            is_active = excluded.is_active,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            deleted_at = NULL;`,
           [
             t.id,
             t.name,
