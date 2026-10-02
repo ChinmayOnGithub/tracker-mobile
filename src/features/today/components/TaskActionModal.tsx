@@ -16,6 +16,7 @@ interface TaskActionModalProps {
   onClose: () => void
   onSetStatus: (task: TaskOccurrence, status: 'cleared' | 'done' | 'canceled' | 'postponed') => void
   onDeleteLog: (logId: string) => void
+  onRePostpone?: (task: TaskOccurrence) => void
 }
 
 export function TaskActionModal({
@@ -24,6 +25,7 @@ export function TaskActionModal({
   onClose,
   onSetStatus,
   onDeleteLog,
+  onRePostpone,
 }: TaskActionModalProps) {
   if (!task) return null
 
@@ -92,6 +94,26 @@ export function TaskActionModal({
               >
                 <TrackerIcon name="clock" size="sm" color={colors.warning} />
                 <Text style={styles.actionText}>Postpone to Tomorrow</Text>
+              </Pressable>
+            )}
+
+            {/* Re-postpone on next day: return to previous scheduled day */}
+            {task.isPostponedOccurrence && (
+              <Pressable
+                onPress={() => {
+                  if (onRePostpone) {
+                    onRePostpone(task)
+                  } else if (task.postponedLogId) {
+                    onDeleteLog(task.postponedLogId)
+                  }
+                  onClose()
+                }}
+                style={styles.actionItem}
+              >
+                <TrackerIcon name="restore" size="sm" color={colors.coral} />
+                <Text style={[styles.actionText, styles.restoreText]}>
+                  Re-postpone (Return to {task.postponedFromDate || 'previous day'})
+                </Text>
               </Pressable>
             )}
 

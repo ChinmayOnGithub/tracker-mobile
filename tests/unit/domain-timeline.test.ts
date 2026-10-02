@@ -78,10 +78,116 @@ describe('Domain Task Occurrence Generation (computeTaskOccurrences)', () => {
     expect(occOct1[0].status).toBe('postponed')
     expect(occOct1[0].isPostponed).toBe(true)
 
-    // On Oct 2 (next day): automatically due as nextDueDate
+    // On Oct 2 (next day): automatically due as nextDueDate with postponement metadata
     const occOct2 = computeTaskOccurrences([weeklyTemplate], logs, '2026-10-02')
     expect(occOct2.length).toBe(1)
     expect(occOct2[0].status).toBe('cleared') // Fresh pending task for the new day
+    expect(occOct2[0].isPostponedOccurrence).toBe(true)
+    expect(occOct2[0].postponedFromDate).toBe('2026-10-01')
+    expect(occOct2[0].postponedLogId).toBe('log-postponed')
+
+    // Re-postpone / unpostpone: deleting the postponed log removes the task from Oct 2
+    const revertedLogs = logs.filter((l) => l.id !== 'log-postponed')
+    // Next due date for weekly without postpone log is not Oct 2
+    const occReverted = computeTaskOccurrences(
+      [{ ...weeklyTemplate, recurrenceInterval: 1 } as any],
+      revertedLogs,
+      '2026-10-02'
+    )
+    expect(occReverted.length).toBe(1)
+    expect(occReverted[0].isPostponedOccurrence).toBe(false)
+  })
+
+  it('supports repeated postpone (Monday -> Tuesday -> Wednesday)', () => {
+    const weeklyTemplate: ActivityTemplate = {
+      ...baseTemplate,
+      id: 't-weekly',
+      name: 'Weekly Review',
+      recurrenceType: 'weekly',
+    }
+
+    // Postponed on Oct 1, then postponed again on Oct 2
+    const logs: ActivityLog[] = [
+      {
+        id: 'log-postpone-1',
+        activityId: 't-weekly',
+        date: '2026-10-01',
+        status: 'postponed',
+        note: null,
+        amount: null,
+        createdAt: '2026-10-01T12:00:00.000Z',
+        updatedAt: '2026-10-01T12:00:00.000Z',
+      },
+      {
+        id: 'log-postpone-2',
+        activityId: 't-weekly',
+        date: '2026-10-02',
+        status: 'postponed',
+        note: null,
+        amount: null,
+        createdAt: '2026-10-02T12:00:00.000Z',
+        updatedAt: '2026-10-02T12:00:00.000Z',
+      },
+    ]
+
+    // On Oct 2: shown as postponed (history preserved on Oct 2)
+    const occOct2 = computeTaskOccurrences([weeklyTemplate], logs, '2026-10-02')
+    expect(occOct2.length).toBe(1)
+    expect(occOct2[0].status).toBe('postponed')
+    expect(occOct2[0].isPostponed).toBe(true)
+
+    // On Oct 3: due as postponed occurrence from Oct 2
+    const occOct3 = computeTaskOccurrences([weeklyTemplate], logs, '2026-10-03')
+    expect(occOct3.length).toBe(1)
+    expect(occOct3[0].status).toBe('cleared')
+    expect(occOct3[0].isPostponedOccurrence).toBe(true)
+    expect(occOct3[0].postponedFromDate).toBe('2026-10-02')
+    expect(occOct3[0].postponedLogId).toBe('log-postpone-2')
+  })
+
+  it('handles one-time task postpone and unpostpone targetDate reversion', () => {
+    const oneTimeTemplate: ActivityTemplate = {
+      ...baseTemplate,
+      id: 't-onetime',
+      name: 'File Taxes',
+      recurrenceType: 'one_time',
+      targetDate: '2026-10-02', // Postponed to Oct 2
+    } as any
+
+    const logs: ActivityLog[] = [
+      {
+        id: 'log-onetime-postponed',
+        activityId: 't-onetime',
+        date: '2026-10-01',
+        status: 'postponed',
+        note: null,
+        amount: null,
+        createdAt: '2026-10-01T10:00:00.000Z',
+        updatedAt: '2026-10-01T10:00:00.000Z',
+      },
+    ]
+
+    // On Oct 2: due as postponed occurrence
+    const occOct2 = computeTaskOccurrences([oneTimeTemplate], logs, '2026-10-02')
+    expect(occOct2.length).toBe(1)
+    expect(occOct2[0].isPostponedOccurrence).toBe(true)
+    expect(occOct2[0].postponedFromDate).toBe('2026-10-01')
+    expect(occOct2[0].postponedLogId).toBe('log-onetime-postponed')
+
+    // On unpostpone: targetDate reverted to 2026-10-01, log deleted
+    const revertedTemplate: ActivityTemplate = {
+      ...oneTimeTemplate,
+      targetDate: '2026-10-01',
+    } as any
+
+    // On Oct 2: no longer due!
+    const occOct2AfterRevert = computeTaskOccurrences([revertedTemplate], [], '2026-10-02')
+    expect(occOct2AfterRevert.length).toBe(0)
+
+    // On Oct 1: due on original date!
+    const occOct1AfterRevert = computeTaskOccurrences([revertedTemplate], [], '2026-10-01')
+    expect(occOct1AfterRevert.length).toBe(1)
+    expect(occOct1AfterRevert[0].status).toBe('cleared')
   })
 
   it('orders timed activities before untimed activities, then by priority', () => {

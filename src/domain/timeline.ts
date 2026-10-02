@@ -1,5 +1,6 @@
 import type { ActivityLog, ActivityTemplate } from '@/api/client'
 import {
+  addUTCDays,
   analyzeRecurrence,
   isOccurrenceValidForDate,
   type RecurrenceAnalysis,
@@ -16,6 +17,9 @@ export interface TaskOccurrence {
   isCompleted: boolean
   isCanceled: boolean
   isPostponed: boolean
+  isPostponedOccurrence: boolean
+  postponedFromDate: string | null
+  postponedLogId: string | null
   priority: string
   category: string
   color: string
@@ -79,6 +83,21 @@ export function computeTaskOccurrences(
     const isCanceled = status === 'canceled'
     const isPostponed = status === 'postponed'
 
+    // Detect if this occurrence is active today because it was postponed from an earlier date
+    const priorPostponeLog = !hasLogToday
+      ? templateLogs
+          .filter((l) => l.status === 'postponed' && l.date < dateStr)
+          .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null
+      : null
+
+    const isPostponedOccurrence = !!priorPostponeLog && (
+      template.recurrenceType === 'one_time' ||
+      analysis.statusMessage === 'Postponed' ||
+      addUTCDays(priorPostponeLog.date, 1) === dateStr
+    )
+    const postponedFromDate = isPostponedOccurrence ? priorPostponeLog.date : null
+    const postponedLogId = isPostponedOccurrence ? (priorPostponeLog.id ?? null) : null
+
     const scheduledTime = ('scheduledTime' in template ? template.scheduledTime : null) as string | null
     const isTimed = !!scheduledTime
 
@@ -92,6 +111,9 @@ export function computeTaskOccurrences(
       isCompleted,
       isCanceled,
       isPostponed,
+      isPostponedOccurrence,
+      postponedFromDate,
+      postponedLogId,
       priority: ('priority' in template ? (template as Record<string, unknown>).priority : 'NORMAL') as string,
       category: template.category,
       color: template.color || 'zinc',

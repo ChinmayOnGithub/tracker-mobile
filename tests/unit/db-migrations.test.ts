@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test'
+﻿import { describe, expect, it } from 'bun:test'
 import { MIGRATIONS } from '@/db/migrations'
 
 describe('SQLite Database Migrations', () => {
@@ -56,5 +56,35 @@ describe('SQLite Database Migrations', () => {
     expect(combined).toContain('CREATE TABLE IF NOT EXISTS mutation_queue')
     expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_mutation_queue_created')
     expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_mutation_queue_entity')
+  })
+  it('contains migration 3 with outbox hardening, calendar_event, onboarding_state, tombstones', async () => {
+    const v3 = MIGRATIONS.find((m) => m.version === 3)
+    expect(v3).toBeDefined()
+    expect(v3?.name).toBe('outbox_hardening_and_production_tables')
+
+    const executedSql: string[] = []
+    const mockDb = {
+      execAsync: async (sql: string) => {
+        executedSql.push(sql)
+      },
+    }
+
+    await v3!.up(mockDb as unknown as import('expo-sqlite').SQLiteDatabase)
+    const combined = executedSql.join('\n')
+
+    expect(combined).toContain('ALTER TABLE mutation_queue ADD COLUMN mutation_id TEXT')
+    expect(combined).toContain('ALTER TABLE mutation_queue ADD COLUMN attempt_count INTEGER')
+    expect(combined).toContain('ALTER TABLE mutation_queue ADD COLUMN status TEXT')
+    expect(combined).toContain('ALTER TABLE mutation_queue ADD COLUMN last_error TEXT')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_mutation_queue_status')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_activity_template_updated')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_activity_log_updated')
+    expect(combined).toContain('CREATE TABLE IF NOT EXISTS calendar_event')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_calendar_event_start')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_calendar_event_range')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_calendar_event_google_id')
+    expect(combined).toContain('CREATE TABLE IF NOT EXISTS onboarding_state')
+    expect(combined).toContain('CREATE TABLE IF NOT EXISTS tombstones')
+    expect(combined).toContain('CREATE INDEX IF NOT EXISTS idx_tombstones_deleted')
   })
 })

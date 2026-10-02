@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { useSQLiteContext } from 'expo-sqlite'
 import {
   trackerApi,
   type CalendarDayDTO,
@@ -20,6 +21,7 @@ import { ErrorView } from '@/components/ErrorView'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
+import { CalendarRepository, type LocalCalendarEvent } from '@/db/repository'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 
@@ -28,6 +30,9 @@ type CalendarViewMode = 'month' | 'week' | 'day'
 const WEEK_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function CalendarScreen() {
+  const db = useSQLiteContext()
+  const calendarRepo = useMemo(() => new CalendarRepository(db), [db])
+
   const today = todayYmd()
   const [selectedDate, setSelectedDate] = useState(today)
   const [viewMode, setViewMode] = useState<CalendarViewMode>('month')
@@ -74,17 +79,105 @@ export function CalendarScreen() {
         const startOfWeek = getStartOfWeek(selectedDate)
         const res = await trackerApi.getCalendarWeek(startOfWeek)
         setWeekData(res.week)
+
+        // Cache events to SQLite in background
+        const now = new Date().toISOString()
+        const eventsToCache: LocalCalendarEvent[] = []
+        for (const day of res.week.days) {
+          for (const ev of day.events) {
+            eventsToCache.push({
+              id: ev.id,
+              googleEventId: ev.id,
+              calendarId: 'primary',
+              title: ev.title,
+              description: null,
+              location: null,
+              startDate: ev.start,
+              endDate: ev.end,
+              allDay: ev.allDay,
+              color: ev.color,
+              status: ev.status ?? 'confirmed',
+              trackerArtifactId: ev.trackerArtifactId,
+              trackerArtifactType: ev.trackerArtifactType,
+              isDeleted: false,
+              syncedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            })
+          }
+        }
+        void calendarRepo.upsertEvents(eventsToCache).catch(() => {})
       } else {
         const res = await trackerApi.getCalendarDay(selectedDate)
         setDayData(res.day)
+
+        // Cache events to SQLite in background
+        const now = new Date().toISOString()
+        const eventsToCache: LocalCalendarEvent[] = res.day.events.map((ev) => ({
+          id: ev.id,
+          googleEventId: ev.id,
+          calendarId: 'primary',
+          title: ev.title,
+          description: ev.description,
+          location: null,
+          startDate: ev.start,
+          endDate: ev.end,
+          allDay: ev.allDay,
+          color: ev.color,
+          status: ev.status,
+          trackerArtifactId: ev.trackerArtifactId,
+          trackerArtifactType: ev.trackerArtifactType,
+          isDeleted: false,
+          syncedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }))
+        void calendarRepo.upsertEvents(eventsToCache).catch(() => {})
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load calendar data.')
+      // Fallback to SQLite cached events on network error
+      try {
+        if (viewMode === 'day') {
+          const cached = await calendarRepo.getByDate(selectedDate)
+          if (cached.length > 0) {
+            setDayData({
+              date: selectedDate,
+              events: cached.map((e) => ({
+                id: e.id,
+                title: e.title,
+                start: e.startDate,
+                end: e.endDate,
+                allDay: e.allDay,
+                color: e.color,
+                type: 'MEETING',
+                trackerArtifactId: e.trackerArtifactId,
+                trackerArtifactType: e.trackerArtifactType,
+                status: e.status,
+                description: e.description,
+              })),
+              tasks: [],
+              workedHours: 0,
+              workStatus: 'cleared',
+              workDetails: null,
+              journalEntry: null,
+              weight: null,
+              habits: [],
+              isLeave: false,
+              leaveDetails: null,
+            })
+            setError('Showing cached offline calendar.')
+            return
+          }
+        }
+        setError(err instanceof Error ? err.message : 'Unable to load calendar data.')
+      } catch {
+        setError(err instanceof Error ? err.message : 'Unable to load calendar data.')
+      }
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [viewMode, selectedDate, currentYear, currentMonth])
+  }, [viewMode, selectedDate, currentYear, currentMonth, calendarRepo])
 
   useFocusEffect(
     useCallback(() => {

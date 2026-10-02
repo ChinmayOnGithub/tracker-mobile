@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Alert, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useSQLiteContext } from 'expo-sqlite'
@@ -13,11 +13,19 @@ import { ErrorView } from '@/components/ErrorView'
 import { Input } from '@/components/Input'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
-import { cacheTemplates, getCachedTemplates } from '@/db/database'
+import { OutboxRepository, TemplateRepository } from '@/db/repository'
 import { colors, spacing, typography } from '@/theme/tokens'
 import { ActivityCard } from './components/ActivityCard'
 import { ActivityCategoryPills } from './components/ActivityCategoryPills'
 import { ActivityFormModal } from './components/ActivityFormModal'
+
+function generateLocalUuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 const PRESET_CATEGORIES = ['all', 'work', 'personal', 'fitness', 'health', 'learning']
 
@@ -35,32 +43,42 @@ export function ActivitiesScreen() {
   const [saving, setSaving] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
 
-  const load = useCallback(async (isPull = false) => {
-    if (isPull) setRefreshing(true)
-    else setLoading(true)
-    setError(null)
+  const templateRepo = useMemo(() => new TemplateRepository(db), [db])
+  const outboxRepo = useMemo(() => new OutboxRepository(db), [db])
 
-    try {
-      const result = await trackerApi.getTemplates()
-      setTemplates(result.templates)
-      void cacheTemplates(db, result.templates).catch(() => {})
-    } catch (err) {
+  const load = useCallback(
+    async (isPull = false) => {
+      if (isPull) setRefreshing(true)
+      setError(null)
+
+      // Step 1: Instant local SQLite read
       try {
-        const cached = await getCachedTemplates(db)
+        const cached = await templateRepo.getActiveTemplates()
         if (cached.length > 0) {
           setTemplates(cached)
-          setError('Showing cached offline activities.')
-        } else {
-          setError(err instanceof Error ? err.message : 'Unable to load activities.')
+          setLoading(false)
         }
       } catch {
-        setError(err instanceof Error ? err.message : 'Unable to load activities.')
+        // Fall through to server fetch
       }
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [db])
+
+      // Step 2: Background reconciliation from server
+      try {
+        const result = await trackerApi.getTemplates()
+        await templateRepo.upsertFromServer(result.templates)
+        const fresh = await templateRepo.getActiveTemplates()
+        setTemplates(fresh)
+      } catch (err) {
+        if (templates.length === 0) {
+          setError(err instanceof Error ? err.message : 'Unable to load activities.')
+        }
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [templateRepo, templates.length]
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -85,9 +103,10 @@ export function ActivitiesScreen() {
         color: data.color,
         icon: 'activity',
       }
-      await trackerApi.createTemplate(input)
+      const res = await trackerApi.createTemplate(input)
+      await templateRepo.upsertFromServer([res.template])
+      setTemplates((prev) => [...prev, res.template].sort((a, b) => a.name.localeCompare(b.name)))
       setModalVisible(false)
-      await load()
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Failed to create activity.')
     } finally {
@@ -105,9 +124,29 @@ export function ActivitiesScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            const mutationId = generateLocalUuid()
+            const outboxId = generateLocalUuid()
             try {
-              await trackerApi.deleteTemplate(id)
+              // Optimistic local soft-delete + outbox entry
+              await db.withTransactionAsync(async () => {
+                await templateRepo.markDeleted(id)
+                await outboxRepo.enqueue(
+                  outboxId,
+                  mutationId,
+                  'activity_template',
+                  id,
+                  'delete_template',
+                  { id }
+                )
+              })
               setTemplates((prev) => prev.filter((t) => t.id !== id))
+
+              try {
+                await trackerApi.deleteTemplate(id)
+                await outboxRepo.markDone(outboxId)
+              } catch {
+                await outboxRepo.markFailed(outboxId, 'Network delete failed')
+              }
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete activity.')
             }

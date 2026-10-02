@@ -80,6 +80,12 @@ export function TodayTaskRow({
               <Text style={styles.postponedBadgeText}>Tomorrow</Text>
             </View>
           )}
+
+          {task.isPostponedOccurrence && (
+            <View style={styles.postponedBadge}>
+              <Text style={styles.postponedBadgeText}>Postponed</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.metaRow}>

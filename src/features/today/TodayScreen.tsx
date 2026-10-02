@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
+  AppState,
+  type AppStateStatus,
   Pressable,
   StyleSheet,
   Text,
@@ -17,7 +19,7 @@ import { ErrorView } from '@/components/ErrorView'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { cacheLogs, cacheTemplates, getCachedLogs, getCachedTemplates } from '@/db/database'
+import { LogRepository, OutboxRepository, TemplateRepository } from '@/db/repository'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
 import { getNextActivityStatus, type ActivityStatus } from '@/domain/activity'
@@ -26,6 +28,15 @@ import { TodayTaskRow } from './components/TodayTaskRow'
 import { TaskActionModal } from './components/TaskActionModal'
 import { WorkSessionCard } from './WorkSessionCard'
 import { WeightWidgetCard } from './WeightWidgetCard'
+
+function generateLocalUuid(): string {
+  // Simple RFC4122 v4 UUID generator for local optimistic IDs
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 export function TodayScreen() {
   const db = useSQLiteContext()
@@ -41,47 +52,83 @@ export function TodayScreen() {
 
   const inFlightMutationRef = useRef(new Set<string>())
 
-  const load = useCallback(async (isPull = false) => {
-    if (isPull) setRefreshing(true)
-    else setLoading(true)
-    setError(null)
+  // Repository instances
+  const templateRepo = useMemo(() => new TemplateRepository(db), [db])
+  const logRepo = useMemo(() => new LogRepository(db), [db])
+  const outboxRepo = useMemo(() => new OutboxRepository(db), [db])
 
-    try {
-      const [templateResult, logResult] = await Promise.all([
-        trackerApi.getTemplates(),
-        trackerApi.getLogs(selectedDate),
-      ])
+  // Load flow: SQLite-first (instant render), then server reconciliation in background
+  const load = useCallback(
+    async (isPull = false) => {
+      if (isPull) setRefreshing(true)
+      setError(null)
 
-      setTemplates(templateResult.templates)
-      setLogs(logResult.logs)
-
-      // Background cache to SQLite
-      void cacheTemplates(db, templateResult.templates).catch(() => {})
-      void cacheLogs(db, logResult.logs).catch(() => {})
-    } catch (err) {
-      // Fallback to SQLite cache on network failure
+      // Step 1: Read local SQLite immediately
       try {
-        const cachedT = await getCachedTemplates(db)
-        const cachedL = await getCachedLogs(db, selectedDate)
-        if (cachedT.length > 0) {
+        const [cachedT, cachedL] = await Promise.all([
+          templateRepo.getActiveTemplates(),
+          logRepo.getByDate(selectedDate),
+        ])
+        if (cachedT.length > 0 || cachedL.length > 0) {
           setTemplates(cachedT)
           setLogs(cachedL)
-          setError('Showing cached offline data.')
-        } else {
-          setError(err instanceof Error ? err.message : 'Unable to load today.')
+          setLoading(false)
         }
       } catch {
-        setError(err instanceof Error ? err.message : 'Unable to load today.')
+        // SQLite read failed; continue to network attempt
       }
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [selectedDate, db])
+
+      // Step 2: Background reconciliation from Tracker API
+      try {
+        const [templateResult, logResult] = await Promise.all([
+          trackerApi.getTemplates(),
+          trackerApi.getLogs(selectedDate),
+        ])
+
+        // Upsert to SQLite
+        await Promise.all([
+          templateRepo.upsertFromServer(templateResult.templates),
+          logRepo.upsertFromServer(logResult.logs),
+        ])
+
+        // Re-read canonical local SQLite state
+        const [freshT, freshL] = await Promise.all([
+          templateRepo.getActiveTemplates(),
+          logRepo.getByDate(selectedDate),
+        ])
+        setTemplates(freshT)
+        setLogs(freshL)
+      } catch (err) {
+        // If network failed and we had no cache loaded yet, surface error
+        if (templates.length === 0 && logs.length === 0) {
+          setError(err instanceof Error ? err.message : 'Unable to load today.')
+        }
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [selectedDate, templateRepo, logRepo, templates.length, logs.length]
+  )
 
   useFocusEffect(
     useCallback(() => {
       void load()
+    }, [load])
+  )
+
+  // AppState foregrounding listener for automatic refresh
+  useFocusEffect(
+    useCallback(() => {
+      const handleAppStateChange = (nextState: AppStateStatus) => {
+        if (nextState === 'active') {
+          void load()
+        }
+      }
+      const subscription = AppState.addEventListener('change', handleAppStateChange)
+      return () => {
+        subscription.remove()
+      }
     }, [load])
   )
 
@@ -94,7 +141,7 @@ export function TodayScreen() {
   const totalCount = tasks.length
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
-  // Checklist status cycling
+  // Checklist status cycling: optimistic update -> outbox enqueue -> API drain
   const handleCycleStatus = async (task: TaskOccurrence) => {
     const lockKey = task.templateId
     if (inFlightMutationRef.current.has(lockKey)) return
@@ -102,23 +149,111 @@ export function TodayScreen() {
     setTogglingId(task.templateId)
 
     const nextStatus = getNextActivityStatus(task.status, task.template.recurrenceType)
+    const mutationId = generateLocalUuid()
+    const outboxId = generateLocalUuid()
 
     try {
       if (nextStatus === 'cleared') {
         if (task.logId) {
-          await trackerApi.deleteLog(task.logId)
-          setLogs((prev) => prev.filter((l) => l.id !== task.logId))
+          const logIdToDelete = task.logId
+          // Optimistic local delete + outbox in transaction
+          await db.withTransactionAsync(async () => {
+            await logRepo.markDeleted(logIdToDelete)
+            await outboxRepo.enqueue(
+              outboxId,
+              mutationId,
+              'activity_log',
+              logIdToDelete,
+              'delete_log',
+              { id: logIdToDelete }
+            )
+          })
+          setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+
+          // Server drain attempt
+          try {
+            await trackerApi.deleteLog(logIdToDelete)
+            await outboxRepo.markDone(outboxId)
+          } catch {
+            await outboxRepo.markFailed(outboxId, 'Network request failed during cycle')
+          }
         }
       } else if (task.logId) {
-        const res = await trackerApi.updateLog(task.logId, { status: nextStatus })
-        setLogs((prev) => prev.map((l) => (l.id === task.logId ? res.log : l)))
+        const logIdToUpdate = task.logId
+        // Optimistic local update + outbox in transaction
+        await db.withTransactionAsync(async () => {
+          await logRepo.optimisticUpdate(logIdToUpdate, nextStatus)
+          await outboxRepo.enqueue(
+            outboxId,
+            mutationId,
+            'activity_log',
+            logIdToUpdate,
+            'update_log',
+            { id: logIdToUpdate, status: nextStatus }
+          )
+        })
+        const now = new Date().toISOString()
+        setLogs((prev) =>
+          prev.map((l) =>
+            l.id === logIdToUpdate ? { ...l, status: nextStatus, updatedAt: now } : l
+          )
+        )
+
+        // Server drain attempt
+        try {
+          const res = await trackerApi.updateLog(logIdToUpdate, { status: nextStatus })
+          await logRepo.upsertFromServer([res.log])
+          await outboxRepo.markDone(outboxId)
+        } catch {
+          await outboxRepo.markFailed(outboxId, 'Network request failed during cycle')
+        }
       } else {
-        const res = await trackerApi.createLog({
+        // Optimistic local create + outbox in transaction
+        const clientLogId = generateLocalUuid()
+        const now = new Date().toISOString()
+        const optimisticLog: ActivityLog = {
+          id: clientLogId,
           activityId: task.templateId,
           date: selectedDate,
           status: nextStatus,
+          note: null,
+          amount: null,
+          createdAt: now,
+          updatedAt: now,
+        }
+
+        await db.withTransactionAsync(async () => {
+          await logRepo.optimisticCreate(optimisticLog)
+          await outboxRepo.enqueue(
+            outboxId,
+            mutationId,
+            'activity_log',
+            clientLogId,
+            'create_log',
+            {
+              activityId: task.templateId,
+              date: selectedDate,
+              status: nextStatus,
+            }
+          )
         })
-        setLogs((prev) => [...prev, res.log])
+        setLogs((prev) => [...prev, optimisticLog])
+
+        // Server drain attempt
+        try {
+          const res = await trackerApi.createLog({
+            activityId: task.templateId,
+            date: selectedDate,
+            status: nextStatus,
+          })
+          // Replace optimistic client id with server-assigned log
+          await db.runAsync('DELETE FROM activity_log WHERE id = ?;', [clientLogId])
+          await logRepo.upsertFromServer([res.log])
+          await outboxRepo.markDone(outboxId)
+          setLogs((prev) => prev.map((l) => (l.id === clientLogId ? res.log : l)))
+        } catch {
+          await outboxRepo.markFailed(outboxId, 'Network request failed during cycle')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update task.')
@@ -138,22 +273,104 @@ export function TodayScreen() {
     inFlightMutationRef.current.add(lockKey)
     setTogglingId(task.templateId)
 
+    const mutationId = generateLocalUuid()
+    const outboxId = generateLocalUuid()
+
     try {
       if (targetStatus === 'cleared') {
         if (task.logId) {
-          await trackerApi.deleteLog(task.logId)
-          setLogs((prev) => prev.filter((l) => l.id !== task.logId))
+          const logIdToDelete = task.logId
+          await db.withTransactionAsync(async () => {
+            await logRepo.markDeleted(logIdToDelete)
+            await outboxRepo.enqueue(
+              outboxId,
+              mutationId,
+              'activity_log',
+              logIdToDelete,
+              'delete_log',
+              { id: logIdToDelete }
+            )
+          })
+          setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+
+          try {
+            await trackerApi.deleteLog(logIdToDelete)
+            await outboxRepo.markDone(outboxId)
+          } catch {
+            await outboxRepo.markFailed(outboxId, 'Network request failed during set status')
+          }
         }
       } else if (task.logId) {
-        const res = await trackerApi.updateLog(task.logId, { status: targetStatus })
-        setLogs((prev) => prev.map((l) => (l.id === task.logId ? res.log : l)))
+        const logIdToUpdate = task.logId
+        await db.withTransactionAsync(async () => {
+          await logRepo.optimisticUpdate(logIdToUpdate, targetStatus)
+          await outboxRepo.enqueue(
+            outboxId,
+            mutationId,
+            'activity_log',
+            logIdToUpdate,
+            'update_log',
+            { id: logIdToUpdate, status: targetStatus }
+          )
+        })
+        const now = new Date().toISOString()
+        setLogs((prev) =>
+          prev.map((l) =>
+            l.id === logIdToUpdate ? { ...l, status: targetStatus, updatedAt: now } : l
+          )
+        )
+
+        try {
+          const res = await trackerApi.updateLog(logIdToUpdate, { status: targetStatus })
+          await logRepo.upsertFromServer([res.log])
+          await outboxRepo.markDone(outboxId)
+        } catch {
+          await outboxRepo.markFailed(outboxId, 'Network request failed during set status')
+        }
       } else {
-        const res = await trackerApi.createLog({
+        const clientLogId = generateLocalUuid()
+        const now = new Date().toISOString()
+        const optimisticLog: ActivityLog = {
+          id: clientLogId,
           activityId: task.templateId,
           date: selectedDate,
           status: targetStatus,
+          note: null,
+          amount: null,
+          createdAt: now,
+          updatedAt: now,
+        }
+
+        await db.withTransactionAsync(async () => {
+          await logRepo.optimisticCreate(optimisticLog)
+          await outboxRepo.enqueue(
+            outboxId,
+            mutationId,
+            'activity_log',
+            clientLogId,
+            'create_log',
+            {
+              activityId: task.templateId,
+              date: selectedDate,
+              status: targetStatus,
+            }
+          )
         })
-        setLogs((prev) => [...prev, res.log])
+        setLogs((prev) => [...prev, optimisticLog])
+
+        try {
+          const res = await trackerApi.createLog({
+            activityId: task.templateId,
+            date: selectedDate,
+            status: targetStatus,
+          })
+          await db.runAsync('DELETE FROM activity_log WHERE id = ?;', [clientLogId])
+          await logRepo.upsertFromServer([res.log])
+          await outboxRepo.markDone(outboxId)
+          setLogs((prev) => prev.map((l) => (l.id === clientLogId ? res.log : l)))
+        } catch {
+          await outboxRepo.markFailed(outboxId, 'Network request failed during set status')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update task.')
@@ -165,11 +382,62 @@ export function TodayScreen() {
 
   // Delete Log
   const handleDeleteLog = async (logId: string) => {
+    const mutationId = generateLocalUuid()
+    const outboxId = generateLocalUuid()
     try {
-      await trackerApi.deleteLog(logId)
+      await db.withTransactionAsync(async () => {
+        await logRepo.markDeleted(logId)
+        await outboxRepo.enqueue(
+          outboxId,
+          mutationId,
+          'activity_log',
+          logId,
+          'delete_log',
+          { id: logId }
+        )
+      })
       setLogs((prev) => prev.filter((l) => l.id !== logId))
+
+      try {
+        await trackerApi.deleteLog(logId)
+        await outboxRepo.markDone(outboxId)
+      } catch {
+        await outboxRepo.markFailed(outboxId, 'Network request failed during delete log')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete log.')
+    }
+  }
+
+  // Re-postpone: revert a task that was postponed to today back to its previous day
+  const handleRePostpone = async (task: TaskOccurrence) => {
+    if (!task.postponedLogId) return
+    const logIdToDelete = task.postponedLogId
+    const mutationId = generateLocalUuid()
+    const outboxId = generateLocalUuid()
+
+    try {
+      await db.withTransactionAsync(async () => {
+        await logRepo.markDeleted(logIdToDelete)
+        await outboxRepo.enqueue(
+          outboxId,
+          mutationId,
+          'activity_log',
+          logIdToDelete,
+          'delete_log',
+          { id: logIdToDelete }
+        )
+      })
+      setLogs((prev) => prev.filter((l) => l.id !== logIdToDelete))
+
+      try {
+        await trackerApi.deleteLog(logIdToDelete)
+        await outboxRepo.markDone(outboxId)
+      } catch {
+        await outboxRepo.markFailed(outboxId, 'Network request failed during re-postpone')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to re-postpone task.')
     }
   }
 
@@ -279,6 +547,7 @@ export function TodayScreen() {
       <TaskActionModal
         onClose={() => setActionModalTask(null)}
         onDeleteLog={handleDeleteLog}
+        onRePostpone={handleRePostpone}
         onSetStatus={handleSetStatus}
         task={actionModalTask}
         visible={actionModalTask !== null}
