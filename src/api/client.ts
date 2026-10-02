@@ -480,5 +480,35 @@ export const trackerApi = {
       { method: 'POST', retries: 0 }
     )
   },
+
+  async getLeaveData(year?: number) {
+    const q = year ? `?year=${year}` : ''
+    return performFetch<{ year: number; allowances: import('./types').LeaveAllowance[]; records: import('./types').LeaveRecord[] }>(
+      `/api/mobile/v1/leave${q}`
+    )
+  },
+
+  async createLeaveRequest(input: import('./types').CreateLeaveInput) {
+    return performFetch<{ record: import('./types').LeaveRecord }>('/api/mobile/v1/leave', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      retries: 0,
+    })
+  },
+
+  async deleteLeaveRequest(id: string) {
+    return performFetch<{ success: boolean }>(
+      `/api/mobile/v1/leave?id=${encodeURIComponent(id)}`,
+      { method: 'DELETE', retries: 0 }
+    )
+  },
+
+  async updateLeaveAllowance(input: import('./types').UpdateLeaveAllowanceInput) {
+    return performFetch<{ allowance: import('./types').LeaveAllowance }>('/api/mobile/v1/leave', {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+      retries: 0,
+    })
+  },
 }
 export * from './types'

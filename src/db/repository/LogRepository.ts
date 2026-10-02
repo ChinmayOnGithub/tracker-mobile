@@ -1,4 +1,4 @@
-﻿import type { SQLiteDatabase } from 'expo-sqlite'
+import type { SQLiteDatabase } from 'expo-sqlite'
 import type { ActivityLog } from '@/api/types'
 
 interface LogRow {
@@ -140,12 +140,24 @@ export class LogRepository {
    * Apply an optimistic update locally.
    * The outbox will push the mutation to the server.
    */
-  async optimisticUpdate(id: string, status: string): Promise<void> {
+  async optimisticUpdate(
+    id: string,
+    status: string,
+    amount?: number | null,
+    payload?: unknown
+  ): Promise<void> {
     const now = new Date().toISOString()
-    await this.db.runAsync(
-      'UPDATE activity_log SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
-      [status, now, id]
-    )
+    if (amount !== undefined || payload !== undefined) {
+      await this.db.runAsync(
+        'UPDATE activity_log SET status = ?, amount = ?, payload_json = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
+        [status, amount ?? null, payload ? JSON.stringify(payload) : null, now, id]
+      )
+    } else {
+      await this.db.runAsync(
+        'UPDATE activity_log SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
+        [status, now, id]
+      )
+    }
   }
 
   /**

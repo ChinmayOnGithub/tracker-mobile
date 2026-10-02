@@ -16,6 +16,8 @@ export interface ActivityTemplate {
   isActive: boolean
   sortOrder?: number
   notes?: string | null
+  amount?: number | null
+  metadata?: string | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
 }
@@ -258,4 +260,51 @@ export interface CalendarDayDTO {
     type: string
     status: string
   } | null
-}
+}
+
+export type LeaveType = 'CASUAL' | 'SICK' | 'PTO' | 'COMP_OFF' | 'HALF_DAY' | 'WFH'
+export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface LeaveAllowance {
+  id: string
+  userId: string
+  year: number
+  leaveType: LeaveType
+  allowance: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LeaveRecord {
+  id: string
+  userId: string
+  leaveType: LeaveType
+  startDate: string
+  endDate: string
+  totalDays: number
+  status: LeaveStatus
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateLeaveInput {
+  leaveType: LeaveType
+  startDate: string
+  endDate: string
+  totalDays: number
+  notes?: string
+}
+
+export interface UpdateLeaveAllowanceInput {
+  leaveType: LeaveType
+  year: number
+  allowance: number
+}
+
+export interface LeaveDataResponse {
+  year: number
+  allowances: LeaveAllowance[]
+  records: LeaveRecord[]
+}
+

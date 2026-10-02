@@ -11,6 +11,7 @@ import { TrackerIcon } from '@/components/TrackerIcon'
 import { OutboxRepository } from '@/db/repository'
 import { drainOutbox } from '@/sync'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { LeaveModal } from '@/features/leave/LeaveModal'
 
 export function SettingsScreen() {
   const { user, logout } = useAuth()
@@ -20,6 +21,7 @@ export function SettingsScreen() {
   const [pendingCount, setPendingCount] = useState<number>(0)
   const [draining, setDraining] = useState<boolean>(false)
   const [syncingCalendar, setSyncingCalendar] = useState<boolean>(false)
+  const [leaveModalVisible, setLeaveModalVisible] = useState<boolean>(false)
 
   const refreshPendingCount = useCallback(async () => {
     try {
@@ -143,6 +145,30 @@ export function SettingsScreen() {
         </View>
       </Card>
 
+      {/* Time Off & Leave Card */}
+      <Card style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={styles.iconHeadingWrap}>
+            <View style={styles.leaveIconWrap}>
+              <TrackerIcon name="calendar" size="sm" color={colors.warning} />
+            </View>
+            <View style={styles.binCopyWrap}>
+              <Text style={styles.cardHeading}>Time Off & Leave</Text>
+              <Text style={styles.cardSubtext}>
+                View entitlements, remaining balances, and submit leave requests.
+              </Text>
+            </View>
+          </View>
+          <Button
+            label="Manage"
+            variant="outline"
+            size="sm"
+            onPress={() => setLeaveModalVisible(true)}
+            accessibilityLabel="Manage Time Off and Leave"
+          />
+        </View>
+      </Card>
+
       {/* Bin / Data Recovery Card */}
       <Card style={styles.card}>
         <View style={styles.rowBetween}>
@@ -203,6 +229,11 @@ export function SettingsScreen() {
         variant="destructive"
         accessibilityLabel="Sign out of Tracker"
       />
+
+      <LeaveModal
+        visible={leaveModalVisible}
+        onClose={() => setLeaveModalVisible(false)}
+      />
     </Screen>
   )
 }
@@ -251,6 +282,14 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -6,6 +6,7 @@ import {
   type RecurrenceAnalysis,
 } from './recurrence'
 import type { ActivityStatus } from './activity'
+import { MobileCompletionService } from './completion'
 
 export interface TaskOccurrence {
   id: string
@@ -28,6 +29,7 @@ export interface TaskOccurrence {
   isTimed: boolean
   scheduledTime: string | null
   analysis: RecurrenceAnalysis
+  completionDisplay: { formatted: string; isMoney: boolean } | null
 }
 
 export function computeTaskOccurrences(
@@ -122,6 +124,13 @@ export function computeTaskOccurrences(
       isTimed,
       scheduledTime,
       analysis,
+      completionDisplay: isCompleted
+        ? MobileCompletionService.formatCompletionDisplay(
+            template,
+            logForDate?.payload,
+            logForDate?.amount
+          )
+        : null,
     })
   }
 

@@ -1,12 +1,14 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Modal,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import type { TaskOccurrence } from '@/domain/timeline'
+import { MobileCompletionService } from '@/domain/completion'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
 
@@ -14,7 +16,11 @@ interface TaskActionModalProps {
   task: TaskOccurrence | null
   visible: boolean
   onClose: () => void
-  onSetStatus: (task: TaskOccurrence, status: 'cleared' | 'done' | 'canceled' | 'postponed') => void
+  onSetStatus: (
+    task: TaskOccurrence,
+    status: 'cleared' | 'done' | 'canceled' | 'postponed',
+    completionValue?: { amount?: number | null; payload?: Record<string, unknown> }
+  ) => void
   onDeleteLog: (logId: string) => void
   onRePostpone?: (task: TaskOccurrence) => void
 }
@@ -33,6 +39,32 @@ export function TaskActionModal({
   const isCanceled = task.isCanceled
   const isPostponed = task.isPostponed
   const isDaily = task.template.recurrenceType === 'daily'
+
+  const completionConfig = MobileCompletionService.getCompletionConfig(task.template)
+  const isValueTarget =
+    completionConfig.method === 'VALUE' ||
+    (typeof task.template.amount === 'number' && task.template.amount > 0)
+
+  const defaultVal = task.template.amount ? String(task.template.amount) : ''
+  const [valueInput, setValueInput] = useState<string>(defaultVal)
+
+  const handleMarkDone = () => {
+    let completionVal: { amount?: number | null; payload?: Record<string, unknown> } | undefined
+    if (isValueTarget && valueInput.trim()) {
+      const num = Number(valueInput.trim())
+      const isNum = !isNaN(num)
+      const unit = completionConfig.value?.unit
+      completionVal = {
+        amount: isNum ? num : null,
+        payload: {
+          value: isNum ? num : valueInput.trim(),
+          ...(unit ? { unit } : {}),
+        },
+      }
+    }
+    onSetStatus(task, 'done', completionVal)
+    onClose()
+  }
 
   return (
     <Modal
@@ -56,18 +88,40 @@ export function TaskActionModal({
             <Text style={styles.category}>{task.category}</Text>
           </View>
 
+          {/* Value Completion Input (if target/counter activity) */}
+          {isValueTarget && !isDone && (
+            <View style={styles.valueSection}>
+              <Text style={styles.valueSectionLabel}>
+                Target Value / Amount {completionConfig.value?.unit ? `(${completionConfig.value.unit})` : ''}
+              </Text>
+              <TextInput
+                style={styles.valueInput}
+                value={valueInput}
+                onChangeText={setValueInput}
+                placeholder={
+                  task.template.amount
+                    ? `Default: ${task.template.amount} ${completionConfig.value?.unit || ''}`
+                    : `Enter amount ${completionConfig.value?.unit ? '(' + completionConfig.value.unit + ')' : ''}`
+                }
+                placeholderTextColor={colors.textMuted}
+                keyboardType={completionConfig.value?.inputType === 'text' ? 'default' : 'numeric'}
+              />
+            </View>
+          )}
+
           {/* Action List */}
           <View style={styles.actionList}>
             {!isDone && (
               <Pressable
-                onPress={() => {
-                  onSetStatus(task, 'done')
-                  onClose()
-                }}
+                onPress={handleMarkDone}
                 style={styles.actionItem}
               >
                 <TrackerIcon name="check" size="sm" color={colors.success} />
-                <Text style={styles.actionText}>Mark Completed</Text>
+                <Text style={styles.actionText}>
+                  {isValueTarget && valueInput.trim()
+                    ? `Complete with ${valueInput.trim()} ${completionConfig.value?.unit || ''}`.trim()
+                    : 'Mark Completed'}
+                </Text>
               </Pressable>
             )}
 
@@ -190,6 +244,32 @@ const styles = StyleSheet.create({
     fontSize: typography.xs.fontSize,
     color: colors.textMuted,
     textTransform: 'capitalize',
+  },
+  valueSection: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  valueSectionLabel: {
+    fontSize: typography.xs.fontSize,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  valueInput: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    fontSize: typography.sm.fontSize,
+    color: colors.text,
+    fontWeight: '600',
   },
   actionList: {
     gap: spacing.xs,

@@ -75,6 +75,14 @@ export function TodayTaskRow({
             {task.title}
           </Text>
 
+          {task.completionDisplay && (
+            <View style={styles.completionBadge}>
+              <Text style={styles.completionBadgeText}>
+                {task.completionDisplay.formatted}
+              </Text>
+            </View>
+          )}
+
           {isPostponed && (
             <View style={styles.postponedBadge}>
               <Text style={styles.postponedBadgeText}>Tomorrow</Text>
@@ -194,6 +202,19 @@ const styles = StyleSheet.create({
   titleCanceled: {
     textDecorationLine: 'line-through',
     color: colors.textSubtle,
+  },
+  completionBadge: {
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderWidth: 1,
+  },
+  completionBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.success,
   },
   postponedBadge: {
     paddingHorizontal: spacing.xs + 2,

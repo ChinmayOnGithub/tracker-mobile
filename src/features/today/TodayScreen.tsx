@@ -39,6 +39,8 @@ import { WorkSessionCard } from './WorkSessionCard'
 import { WeightWidgetCard } from './WeightWidgetCard'
 import { JournalWidgetCard } from './JournalWidgetCard'
 import { DailyCodingCard } from './DailyCodingCard'
+import { LeaveWidgetCard } from './LeaveWidgetCard'
+import { MobileCompletionService } from '@/domain/completion'
 
 function generateLocalUuid(): string {
   // Simple RFC4122 v4 UUID generator for local optimistic IDs
@@ -245,6 +247,14 @@ export function TodayScreen() {
     setTogglingId(task.templateId)
 
     const nextStatus = getNextActivityStatus(task.status, task.template.recurrenceType)
+
+    if (nextStatus === 'done' && MobileCompletionService.needsValuePrompt(task.template)) {
+      inFlightMutationRef.current.delete(lockKey)
+      setTogglingId(null)
+      setActionModalTask(task)
+      return
+    }
+
     const mutationId = generateLocalUuid()
     const outboxId = generateLocalUuid()
 
@@ -362,7 +372,8 @@ export function TodayScreen() {
   // Explicit status change from Context Modal
   const handleSetStatus = async (
     task: TaskOccurrence,
-    targetStatus: ActivityStatus
+    targetStatus: ActivityStatus,
+    completionValue?: { amount?: number | null; payload?: Record<string, unknown> }
   ) => {
     const lockKey = task.templateId
     if (inFlightMutationRef.current.has(lockKey)) return
@@ -398,26 +409,46 @@ export function TodayScreen() {
         }
       } else if (task.logId) {
         const logIdToUpdate = task.logId
+        const newAmount = completionValue?.amount !== undefined ? completionValue.amount : undefined
+        const newPayload = completionValue?.payload !== undefined ? completionValue.payload : undefined
+
         await db.withTransactionAsync(async () => {
-          await logRepo.optimisticUpdate(logIdToUpdate, targetStatus)
+          await logRepo.optimisticUpdate(logIdToUpdate, targetStatus, newAmount, newPayload)
           await outboxRepo.enqueue(
             outboxId,
             mutationId,
             'activity_log',
             logIdToUpdate,
             'update_log',
-            { id: logIdToUpdate, status: targetStatus }
+            {
+              id: logIdToUpdate,
+              status: targetStatus,
+              ...(newAmount !== undefined ? { amount: newAmount } : {}),
+              ...(newPayload !== undefined ? { payload: newPayload } : {}),
+            }
           )
         })
         const now = new Date().toISOString()
         setLogs((prev) =>
           prev.map((l) =>
-            l.id === logIdToUpdate ? { ...l, status: targetStatus, updatedAt: now } : l
+            l.id === logIdToUpdate
+              ? {
+                  ...l,
+                  status: targetStatus,
+                  amount: newAmount !== undefined ? newAmount : l.amount,
+                  payload: newPayload !== undefined ? newPayload : l.payload,
+                  updatedAt: now,
+                }
+              : l
           )
         )
 
         try {
-          const res = await trackerApi.updateLog(logIdToUpdate, { status: targetStatus })
+          const res = await trackerApi.updateLog(logIdToUpdate, {
+            status: targetStatus,
+            ...(newAmount !== undefined ? { amount: newAmount } : {}),
+            ...(newPayload !== undefined ? { payload: newPayload } : {}),
+          })
           await logRepo.upsertFromServer([res.log])
           await outboxRepo.markDone(outboxId)
         } catch {
@@ -432,7 +463,8 @@ export function TodayScreen() {
           date: selectedDate,
           status: targetStatus,
           note: null,
-          amount: null,
+          amount: completionValue?.amount ?? null,
+          payload: completionValue?.payload ?? undefined,
           createdAt: now,
           updatedAt: now,
         }
@@ -449,6 +481,8 @@ export function TodayScreen() {
               activityId: task.templateId,
               date: selectedDate,
               status: targetStatus,
+              ...(completionValue?.amount !== undefined ? { amount: completionValue.amount } : {}),
+              ...(completionValue?.payload !== undefined ? { payload: completionValue.payload } : {}),
             }
           )
         })
@@ -459,6 +493,8 @@ export function TodayScreen() {
             activityId: task.templateId,
             date: selectedDate,
             status: targetStatus,
+            amount: completionValue?.amount ?? null,
+            payload: completionValue?.payload,
           })
           await db.runAsync('DELETE FROM activity_log WHERE id = ?;', [clientLogId])
           await logRepo.upsertFromServer([res.log])
@@ -651,6 +687,7 @@ export function TodayScreen() {
       {/* Secondary Dashboard Widgets */}
       <View style={styles.widgetsSection}>
         <WorkSessionCard date={selectedDate} />
+        <LeaveWidgetCard selectedDate={selectedDate} onLeaveChanged={() => void load()} />
         <JournalWidgetCard date={selectedDate} />
         <DailyCodingCard date={selectedDate} />
         <WeightWidgetCard date={selectedDate} />
