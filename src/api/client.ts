@@ -90,7 +90,11 @@ async function performFetchUnshared<T>(
   const headers = new Headers(customHeaders)
   headers.set('Accept', 'application/json')
 
-  if (rest.body && !headers.has('Content-Type')) {
+  if (
+    rest.body &&
+    !headers.has('Content-Type') &&
+    !(typeof FormData !== 'undefined' && rest.body instanceof FormData)
+  ) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -261,6 +265,33 @@ export const trackerApi = {
   async getLogs(date: string) {
     return performFetch<{ logs: ActivityLog[] }>(
       `/api/mobile/v1/activities/logs?date=${encodeURIComponent(date)}`
+    )
+  },
+
+  async postponeTask(
+    templateId: string,
+    currentDate: string,
+    existingLogId?: string | null
+  ) {
+    return performFetch<{ nextDate: string }>('/api/mobile/v1/activities/logs/postpone', {
+      method: 'POST',
+      body: JSON.stringify({ templateId, currentDate, existingLogId }),
+      retries: 0,
+    })
+  },
+
+  async unpostponeTask(
+    templateId: string,
+    logId: string,
+    originalDate: string
+  ) {
+    const params = new URLSearchParams({ templateId, logId, originalDate })
+    return performFetch<{ restored: boolean }>(
+      `/api/mobile/v1/activities/logs/postpone?${params.toString()}`,
+      {
+        method: 'DELETE',
+        retries: 0,
+      }
     )
   },
 
