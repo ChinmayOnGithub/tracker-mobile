@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store'
 import { config } from '@/config'
+import { dedupeRequest } from '@/utils/requestDeduper'
 import type {
   ActivityLog,
   ActivityTemplate,
@@ -105,11 +106,21 @@ async function performFetch<T>(
     const timer = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
-      const response = await fetch(url, {
-        ...rest,
-        headers,
-        signal: controller.signal,
-      })
+      const requestKey =
+        (!rest.method || rest.method === 'GET')
+          ? `GET:${url}:${headers.get('Authorization') ?? ''}`
+          : null
+
+      const doFetch = () =>
+        fetch(url, {
+          ...rest,
+          headers,
+          signal: controller.signal,
+        })
+
+      const response = requestKey
+        ? await dedupeRequest(requestKey, doFetch)
+        : await doFetch()
 
       clearTimeout(timer)
 
