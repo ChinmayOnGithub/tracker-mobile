@@ -109,6 +109,21 @@ export class LogRepository {
           "DELETE FROM tombstones WHERE entity_type = 'activity_log' AND entity_id = ?;",
           [log.id]
         )
+
+        await this.db.runAsync(
+          'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+          ['activity_log', log.id]
+        )
+        await this.db.runAsync(
+          'INSERT INTO tracker_search (entity_type, entity_id, title, body, updated_at) VALUES (?, ?, ?, ?, ?);',
+          [
+            'activity_log',
+            log.id,
+            log.note ?? log.status,
+            [log.status, log.note ?? '', log.payload ? JSON.stringify(log.payload) : ''].join(' '),
+            log.updatedAt,
+          ]
+        )
       }
     })
   }
@@ -175,6 +190,10 @@ export class LogRepository {
         `INSERT OR REPLACE INTO tombstones (entity_type, entity_id, deleted_at)
          VALUES ('activity_log', ?, ?);`,
         [id, now]
+      )
+      await this.db.runAsync(
+        'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
+        ['activity_log', id]
       )
     })
   }
