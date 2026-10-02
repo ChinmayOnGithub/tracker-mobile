@@ -344,7 +344,7 @@ export const trackerApi = {
     )
   },
 
-  async logWeight(date: string, weight: number, notes?: string, consentToCreateActivity = true) {
+  async logWeight(date: string, weight: number, notes?: string, consentToCreateActivity = false) {
     return performFetch<{ record: WeightRecord }>('/api/mobile/v1/weight', {
       method: 'POST',
       body: JSON.stringify({ date, weight, notes, consentToCreateActivity }),
