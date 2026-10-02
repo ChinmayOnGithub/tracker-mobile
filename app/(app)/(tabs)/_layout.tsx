@@ -82,6 +82,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="search"
+        options={{
+          title: 'Search',
+          tabBarAccessibilityLabel: 'Search tab',
+          tabBarIcon: ({ color }) => (
+            <TrackerIcon name="search" size="sm" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
