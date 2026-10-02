@@ -88,9 +88,19 @@ export class LogRepository {
     await this.db.withTransactionAsync(async () => {
       for (const log of logs) {
         await this.db.runAsync(
-          `INSERT OR REPLACE INTO activity_log (
+          `INSERT INTO activity_log (
             id, activity_id, date, status, note, amount, payload_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            activity_id = excluded.activity_id,
+            date = excluded.date,
+            status = excluded.status,
+            note = excluded.note,
+            amount = excluded.amount,
+            payload_json = excluded.payload_json,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            deleted_at = NULL;`,
           [
             log.id,
             log.activityId,
