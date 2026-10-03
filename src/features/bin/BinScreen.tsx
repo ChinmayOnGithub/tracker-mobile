@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { appEvents } from '@/utils/events'
 import {
   Alert,
   ScrollView,
@@ -93,6 +94,23 @@ export function BinScreen() {
     try {
       await trackerApi.restoreBinItem(item.entityType, item.id)
       setItems((prev) => prev.filter((i) => i.id !== item.id))
+      
+      if (item.entityType === 'note') {
+        appEvents.emit('notes:changed')
+      } else if (item.entityType === 'journal') {
+        appEvents.emit('journal:changed')
+      } else if (item.entityType === 'activity_template') {
+        appEvents.emit('activities:changed')
+        appEvents.emit('tasks:changed')
+      } else if (item.entityType === 'weight') {
+        appEvents.emit('weight:changed')
+      } else if (item.entityType === 'leave') {
+        appEvents.emit('leave:changed')
+        appEvents.emit('calendar:changed')
+      } else if (item.entityType === 'vault') {
+        appEvents.emit('vault:changed')
+      }
+
       Alert.alert('Restored', `"${item.title}" has been restored.`)
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Failed to restore item.')

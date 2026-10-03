@@ -229,4 +229,28 @@ describe('Domain Task Occurrence Generation (computeTaskOccurrences)', () => {
     // Then Low priority untimed item
     expect(occurrences[2].id).toBe('task_t-untimed-low')
   })
+
+  it('includes orphaned activity logs that have no active template', () => {
+    const templates = [baseTemplate]
+    const logs: ActivityLog[] = [
+      {
+        id: 'orphan-log-1',
+        activityId: 'deleted-or-unmatched-template',
+        date: '2026-10-02',
+        status: 'done',
+        note: 'Spontaneous entry',
+        amount: 5,
+        createdAt: '2026-10-02T15:00:00.000Z',
+        updatedAt: '2026-10-02T15:00:00.000Z',
+      },
+    ]
+
+    const occurrences = computeTaskOccurrences(templates, logs, '2026-10-02')
+    expect(occurrences.length).toBe(2)
+    const orphanOcc = occurrences.find((o) => o.id === 'orphan_orphan-log-1')
+    expect(orphanOcc).toBeDefined()
+    expect(orphanOcc?.isCompleted).toBe(true)
+    expect(orphanOcc?.status).toBe('done')
+    expect(orphanOcc?.logId).toBe('orphan-log-1')
+  })
 })

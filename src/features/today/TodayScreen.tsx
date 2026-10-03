@@ -366,6 +366,68 @@ export function TodayScreen() {
       return
     }
 
+    // Special handling for postpone transitions
+    if (nextStatus === 'postponed') {
+      try {
+        await trackerApi.postponeTask(
+          task.templateId,
+          selectedDate,
+          task.logId || null
+        )
+        await load()
+        appEvents.emit('tasks:changed')
+        appEvents.emit('activities:changed')
+        appEvents.emit('calendar:changed')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to postpone task.')
+      } finally {
+        inFlightMutationRef.current.delete(lockKey)
+        setTogglingId(null)
+      }
+      return
+    }
+
+    // Special handling for unpostponing when cycling from postponed back to cleared
+    if (task.status === 'postponed' && task.logId) {
+      try {
+        await trackerApi.unpostponeTask(
+          task.templateId,
+          task.logId,
+          selectedDate
+        )
+        await load()
+        appEvents.emit('tasks:changed')
+        appEvents.emit('activities:changed')
+        appEvents.emit('calendar:changed')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to revert postponed task.')
+      } finally {
+        inFlightMutationRef.current.delete(lockKey)
+        setTogglingId(null)
+      }
+      return
+    }
+
+    if (task.isPostponedOccurrence && task.postponedLogId && task.postponedFromDate && nextStatus === 'cleared') {
+      try {
+        await trackerApi.unpostponeTask(
+          task.templateId,
+          task.postponedLogId,
+          task.postponedFromDate
+        )
+        await load()
+        appEvents.emit('tasks:changed')
+        appEvents.emit('activities:changed')
+        appEvents.emit('calendar:changed')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to revert postponed task.')
+      } finally {
+        inFlightMutationRef.current.delete(lockKey)
+        setTogglingId(null)
+      }
+      return
+    }
+
     const mutationId = generateLocalUuid()
     const outboxId = generateLocalUuid()
 
@@ -822,6 +884,9 @@ export function TodayScreen() {
           selectedDate={selectedDate}
         />
       </View>
+
+      {/* Calendar Events for Today */}
+      <CalendarEventsSection events={calendarEvents} />
 
       {/* Secondary Dashboard Widgets */}
       <View style={styles.widgetsSection}>

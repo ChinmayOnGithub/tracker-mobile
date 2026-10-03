@@ -135,6 +135,83 @@ export function computeTaskOccurrences(
     })
   }
 
+  // Append orphaned records: logs logged for dateStr whose activityId was not processed above
+  const processedTemplateIds = new Set(occurrences.map((o) => o.templateId))
+  const orphanedLogs = logs.filter(
+    (l) => l.date === dateStr && !processedTemplateIds.has(l.activityId)
+  )
+
+  for (const orphanLog of orphanedLogs) {
+    const matchedTemplate = templates.find((t) => t.id === orphanLog.activityId)
+    const rawStatus = (orphanLog.status || 'cleared').toLowerCase()
+    let status: ActivityStatus = 'cleared'
+    if (rawStatus === 'done' || rawStatus === 'paid' || rawStatus === 'completed') {
+      status = 'done'
+    } else if (rawStatus === 'canceled' || rawStatus === 'skipped') {
+      status = 'canceled'
+    } else if (rawStatus === 'postponed') {
+      status = 'postponed'
+    }
+
+    const isCompleted = status === 'done'
+    const isCanceled = status === 'canceled'
+    const isPostponed = status === 'postponed'
+
+    const fallbackTemplate: ActivityTemplate = matchedTemplate ?? {
+      id: orphanLog.activityId,
+      name: 'Logged Activity',
+      category: 'GENERAL',
+      type: 'TASK',
+      icon: 'activity',
+      color: '#6366f1',
+      recurrenceType: 'daily',
+      isActive: true,
+      notes: null,
+      createdAt: orphanLog.createdAt || new Date().toISOString(),
+      updatedAt: orphanLog.updatedAt || new Date().toISOString(),
+    }
+
+    const fallbackAnalysis: RecurrenceAnalysis = {
+      lastCompletedDate: isCompleted ? dateStr : null,
+      nextDueDate: dateStr,
+      overdue: false,
+      daysSinceLast: 0,
+      monthsSinceLast: 0,
+      streak: 0,
+      statusMessage: status === 'done' ? 'Completed' : 'Logged',
+    }
+
+    occurrences.push({
+      id: `orphan_${orphanLog.id}`,
+      templateId: orphanLog.activityId,
+      template: fallbackTemplate,
+      title: fallbackTemplate.name,
+      status,
+      logId: orphanLog.id,
+      isCompleted,
+      isCanceled,
+      isPostponed,
+      isPostponedOccurrence: false,
+      postponedFromDate: null,
+      postponedLogId: null,
+      priority: 'NORMAL',
+      category: fallbackTemplate.category,
+      color: normalizeColor(fallbackTemplate.color),
+      icon: fallbackTemplate.icon || 'activity',
+      estimatedDuration: 0,
+      isTimed: false,
+      scheduledTime: null,
+      analysis: fallbackAnalysis,
+      completionDisplay: isCompleted
+        ? MobileCompletionService.formatCompletionDisplay(
+            fallbackTemplate,
+            orphanLog.payload,
+            orphanLog.amount
+          )
+        : null,
+    })
+  }
+
   // Sort: Timed items first, then by priority (CRITICAL -> HIGH -> NORMAL -> LOW)
   const priorityWeight: Record<string, number> = {
     CRITICAL: 4,

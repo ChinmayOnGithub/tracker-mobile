@@ -43,7 +43,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#0b0d10"
         }
-      ]
+      ],
+      "./plugins/withAndroidWidget"
     ],
     "experiments": {
       "typedRoutes": true

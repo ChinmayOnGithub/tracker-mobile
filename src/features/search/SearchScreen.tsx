@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSQLiteContext } from 'expo-sqlite'
-import { Search as SearchIcon, X } from 'lucide-react-native'
 import { SearchRepository, type SearchResult } from '@/db/repository'
 import { Screen } from '@/components/Screen'
 import { TrackerIcon } from '@/components/TrackerIcon'
@@ -149,7 +148,7 @@ export function SearchScreen() {
       <Text style={[styles.heading, { color: colors.text }]}>Search</Text>
 
       <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SearchIcon size={20} color={colors.textMuted} />
+        <TrackerIcon name="search" size="xs" color={colors.textMuted} />
         <TextInput
           value={query}
           onChangeText={setQuery}
@@ -168,7 +167,7 @@ export function SearchScreen() {
             hitSlop={8}
             onPress={() => setQuery('')}
           >
-            <X size={18} color={colors.textMuted} />
+            <TrackerIcon name="close" size="xs" color={colors.textMuted} />
           </Pressable>
         )}
       </View>

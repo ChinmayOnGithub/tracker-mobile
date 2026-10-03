@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Alert,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,7 @@ import { TrackerIcon, type TrackerIconName } from '@/components/TrackerIcon'
 import { useTheme } from '@/theme/ThemeContext'
 import { radius, spacing, typography } from '@/theme/tokens'
 import { SearchRepository } from '@/db/repository'
+import { appEvents } from '@/utils/events'
 
 function formatBytes(bytes?: number | null): string {
   if (!bytes || bytes <= 0) return '0 B'
@@ -94,6 +96,12 @@ export function VaultScreen() {
     }, [loadVault])
   )
 
+  useEffect(() => {
+    return appEvents.on('vault:changed', () => {
+      void loadVault()
+    })
+  }, [loadVault])
+
   const handleCreateFolder = async () => {
     const trimmed = folderName.trim()
     if (!trimmed) {
@@ -107,6 +115,7 @@ export function VaultScreen() {
       await trackerApi.createVaultFolder(trimmed, currentFolderId)
       setFolderName('')
       setFolderModalVisible(false)
+      appEvents.emit('vault:changed')
       void loadVault()
     } catch (err) {
       setFolderError(err instanceof Error ? err.message : 'Failed to create folder.')
@@ -129,6 +138,7 @@ export function VaultScreen() {
               await trackerApi.deleteVaultItem(item.id)
               setItems((prev) => prev.filter((i) => i.id !== item.id))
               await new SearchRepository(db).remove('vault', item.id)
+              appEvents.emit('vault:changed')
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete item.')
             }
@@ -242,7 +252,18 @@ export function VaultScreen() {
                       Alert.alert(
                         item.name,
                         `Type: ${item.extension?.toUpperCase() || 'FILE'}\nSize: ${formatBytes(item.fileSize)}\n\nThis encrypted file is securely stored in your personal vault.`,
-                        [{ text: 'Close' }]
+                        [
+                          { text: 'Close', style: 'cancel' },
+                          {
+                            text: 'Open / Download',
+                            onPress: () => {
+                              const url = trackerApi.getVaultDownloadUrl(item.id)
+                              void Linking.openURL(url).catch(() => {
+                                Alert.alert('Error', 'Unable to open download URL.')
+                              })
+                            },
+                          },
+                        ]
                       )
                     }
                   }}

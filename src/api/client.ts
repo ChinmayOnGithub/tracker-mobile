@@ -603,5 +603,9 @@ export const trackerApi = {
       { method: 'DELETE', retries: 0 }
     )
   },
+
+  getVaultDownloadUrl(id: string): string {
+    return `${config.apiUrl}/api/vault/download/${encodeURIComponent(id)}`
+  },
 }
 export * from './types'

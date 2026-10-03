@@ -6,6 +6,10 @@ export type AppEventType =
   | 'notes:changed'
   | 'leave:changed'
   | 'weight:changed'
+  | 'vault:changed'
+  | 'work_session:changed'
+  | 'sync:completed'
+  | 'date:changed'
 
 type Listener = () => void
 
