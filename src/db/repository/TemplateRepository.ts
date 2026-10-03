@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { withSafeTransaction } from '../transaction'
 import type { ActivityTemplate } from '@/api/types'
 import { normalizeColor, darkPalette } from '@/theme/tokens'
 
@@ -73,7 +74,7 @@ export class TemplateRepository {
   async upsertFromServer(templates: ActivityTemplate[]): Promise<void> {
     if (templates.length === 0) return
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       for (const t of templates) {
         await this.db.runAsync(
           `INSERT INTO activity_template (
@@ -129,7 +130,7 @@ export class TemplateRepository {
    */
   async markDeleted(id: string): Promise<void> {
     const now = new Date().toISOString()
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       await this.db.runAsync(
         'UPDATE activity_template SET deleted_at = ?, updated_at = ? WHERE id = ?;',
         [now, now, id]

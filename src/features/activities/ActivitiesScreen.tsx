@@ -15,6 +15,7 @@ import { Input } from '@/components/Input'
 import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { OutboxRepository, TemplateRepository } from '@/db/repository'
+import { withSafeTransaction } from '@/db/transaction'
 import { colors, normalizeColor, spacing, typography } from '@/theme/tokens'
 import { fastCache } from '@/utils/dataCache'
 import { appEvents } from '@/utils/events'
@@ -183,7 +184,7 @@ export function ActivitiesScreen() {
             const outboxId = generateLocalUuid()
             try {
               // Optimistic local soft-delete + outbox entry
-              await db.withTransactionAsync(async () => {
+              await withSafeTransaction(db, async () => {
                 await templateRepo.markDeleted(id)
                 await outboxRepo.enqueue(
                   outboxId,

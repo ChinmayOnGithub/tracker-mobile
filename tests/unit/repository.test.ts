@@ -131,7 +131,7 @@ function makeDb() {
     },
 
     async runAsync(sql: string, params?: unknown[]): Promise<void> {
-      if (sql.includes('INSERT OR REPLACE INTO activity_template')) {
+      if (sql.includes('INTO activity_template') && (sql.includes('INSERT INTO') || sql.includes('INSERT OR REPLACE'))) {
         const [id, name, category, type, icon, color, recurrence_type, is_active, created_at, updated_at] = params as [string, string, string, string, string, string, string, number, string, string]
         templates.set(id, { id, name, category, type, icon, color, recurrence_type, is_active, deleted_at: null, created_at, updated_at })
       }
@@ -144,19 +144,21 @@ function makeDb() {
         const entityId = params?.[0] as string
         tombstones.delete(entityId)
       }
-      if (sql.includes("INSERT OR REPLACE INTO tombstones")) {
+      if (sql.includes("INTO tombstones")) {
         const [entityId, deletedAt] = params as [string, string]
         const entityType = sql.includes("'activity_template'") ? 'activity_template' : 'activity_log'
         tombstones.set(entityId, { entity_type: entityType, entity_id: entityId, deleted_at: deletedAt })
       }
-      if (sql.includes('INSERT OR REPLACE INTO activity_log')) {
-        const [id, activity_id, date, status, note, amount, payload_json, created_at, updated_at] = params as [string, string, string, string, string | null, number | null, string | null, string, string]
+      if (sql.includes('INTO activity_log') && (sql.includes('INSERT INTO') || sql.includes('INSERT OR REPLACE'))) {
+        const [id, activity_id, date, status, note, amount, payload_json] = params as [string, string, string, string, string | null, number | null, string | null]
+        const created_at = (params?.[params.length - 2] ?? new Date().toISOString()) as string
+        const updated_at = (params?.[params.length - 1] ?? new Date().toISOString()) as string
         logs.set(id, { id, activity_id, date, status, note, amount, payload_json, deleted_at: null, created_at, updated_at })
       }
       if (sql.includes('UPDATE activity_log SET status')) {
-        const id = params?.[2] as string
+        const id = params?.[params.length - 1] as string
         const row = logs.get(id)
-        if (row) { row.status = params?.[0] as string; row.updated_at = params?.[1] as string }
+        if (row) { row.status = params?.[0] as string; row.updated_at = (params?.[1] ?? new Date().toISOString()) as string }
       }
       if (sql.includes('UPDATE activity_log SET deleted_at')) {
         const id = params?.[2] as string
@@ -184,7 +186,7 @@ function makeDb() {
         const row = queue.get(id)
         if (row) { row.status = 'failed'; row.last_error = error }
       }
-      if (sql.includes('INSERT OR REPLACE INTO calendar_event')) {
+      if (sql.includes('INTO calendar_event') && (sql.includes('INSERT INTO') || sql.includes('INSERT OR REPLACE'))) {
         const [
           id, google_event_id, calendar_id, title, description, location,
           start_date, end_date, all_day, color, status,
@@ -196,6 +198,7 @@ function makeDb() {
           string | null, string | null, number,
           string, string, string
         ]
+
         events.set(id, {
           id, google_event_id, calendar_id, title, description, location,
           start_date, end_date, all_day, color, status,

@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { withSafeTransaction } from './transaction'
 import type { ActivityLog, ActivityTemplate } from '@/api/types'
 import { normalizeColor, darkPalette } from '@/theme/tokens'
 
@@ -34,7 +35,7 @@ export async function cacheTemplates(
   db: SQLiteDatabase,
   templates: ActivityTemplate[]
 ): Promise<void> {
-  await db.withTransactionAsync(async () => {
+  await withSafeTransaction(db, async () => {
     for (const t of templates) {
       await db.runAsync(
         `INSERT OR REPLACE INTO activity_template (
@@ -90,7 +91,7 @@ export async function cacheLogs(
   db: SQLiteDatabase,
   logs: ActivityLog[]
 ): Promise<void> {
-  await db.withTransactionAsync(async () => {
+  await withSafeTransaction(db, async () => {
     for (const log of logs) {
       await db.runAsync(
         `INSERT OR REPLACE INTO activity_log (

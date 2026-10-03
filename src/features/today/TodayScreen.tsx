@@ -27,6 +27,7 @@ import {
   TemplateRepository,
   type LocalCalendarEvent,
 } from '@/db/repository'
+import { withSafeTransaction } from '@/db/transaction'
 import { normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 import { useTheme } from '@/theme/ThemeContext'
 import { addDays, formatDisplayDate, todayYmd } from '@/utils/date'
@@ -258,7 +259,7 @@ export function TodayScreen() {
       ...('targetDate' in input && input.targetDate ? { targetDate: input.targetDate } : {}),
     }
 
-    await db.withTransactionAsync(async () => {
+    await withSafeTransaction(db, async () => {
       await templateRepo.upsertFromServer([optimisticTemplate])
       await outboxRepo.enqueue(
         outboxId,
@@ -312,7 +313,7 @@ export function TodayScreen() {
         if (task.logId) {
           const logIdToDelete = task.logId
           // Optimistic local delete + outbox in transaction
-          await db.withTransactionAsync(async () => {
+          await withSafeTransaction(db, async () => {
             await logRepo.markDeleted(logIdToDelete)
             await outboxRepo.enqueue(
               outboxId,
@@ -338,7 +339,7 @@ export function TodayScreen() {
       } else if (task.logId) {
         const logIdToUpdate = task.logId
         // Optimistic local update + outbox in transaction
-        await db.withTransactionAsync(async () => {
+        await withSafeTransaction(db, async () => {
           await logRepo.optimisticUpdate(logIdToUpdate, nextStatus)
           await outboxRepo.enqueue(
             outboxId,
@@ -381,7 +382,7 @@ export function TodayScreen() {
           updatedAt: now,
         }
 
-        await db.withTransactionAsync(async () => {
+        await withSafeTransaction(db, async () => {
           await logRepo.optimisticCreate(optimisticLog)
           await outboxRepo.enqueue(
             outboxId,
@@ -466,7 +467,7 @@ export function TodayScreen() {
       if (targetStatus === 'cleared') {
         if (task.logId) {
           const logIdToDelete = task.logId
-          await db.withTransactionAsync(async () => {
+          await withSafeTransaction(db, async () => {
             await logRepo.markDeleted(logIdToDelete)
             await outboxRepo.enqueue(
               outboxId,
@@ -493,7 +494,7 @@ export function TodayScreen() {
         const newAmount = completionValue?.amount !== undefined ? completionValue.amount : undefined
         const newPayload = completionValue?.payload !== undefined ? completionValue.payload : undefined
 
-        await db.withTransactionAsync(async () => {
+        await withSafeTransaction(db, async () => {
           await logRepo.optimisticUpdate(logIdToUpdate, targetStatus, newAmount, newPayload)
           await outboxRepo.enqueue(
             outboxId,
@@ -552,7 +553,7 @@ export function TodayScreen() {
           updatedAt: now,
         }
 
-        await db.withTransactionAsync(async () => {
+        await withSafeTransaction(db, async () => {
           await logRepo.optimisticCreate(optimisticLog)
           await outboxRepo.enqueue(
             outboxId,
@@ -602,7 +603,7 @@ export function TodayScreen() {
     const mutationId = generateLocalUuid()
     const outboxId = generateLocalUuid()
     try {
-      await db.withTransactionAsync(async () => {
+      await withSafeTransaction(db, async () => {
         await logRepo.markDeleted(logId)
         await outboxRepo.enqueue(
           outboxId,

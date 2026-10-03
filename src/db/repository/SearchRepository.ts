@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { withSafeTransaction } from '../transaction'
 
 export type SearchEntityType =
   | 'activity_template'
@@ -39,7 +40,7 @@ export class SearchRepository {
   constructor(private readonly db: SQLiteDatabase) {}
 
   async upsert(document: SearchDocument): Promise<void> {
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       await this.db.runAsync(
         'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',
         [document.entityType, document.entityId]
@@ -60,7 +61,7 @@ export class SearchRepository {
   async upsertMany(documents: SearchDocument[]): Promise<void> {
     if (documents.length === 0) return
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       for (const document of documents) {
         await this.db.runAsync(
           'DELETE FROM tracker_search WHERE entity_type = ? AND entity_id = ?;',

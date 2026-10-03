@@ -51,6 +51,7 @@ export interface ActivityLog {
   note: string | null
   amount: number | null
   payload?: unknown
+  version?: number
   createdAt: string
   updatedAt: string
 }

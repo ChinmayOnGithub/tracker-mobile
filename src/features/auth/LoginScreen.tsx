@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import * as ExpoLinking from 'expo-linking'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import Svg, { Path } from 'react-native-svg'
@@ -69,7 +70,8 @@ export function LoginScreen() {
     setError(null)
     setSubmitting(true)
     try {
-      const googleAuthUrl = `${config.apiUrl}/api/auth/google?source=mobile`
+      const callbackUrl = ExpoLinking.createURL('auth-callback')
+      const googleAuthUrl = `${config.apiUrl}/api/auth/google?source=mobile&redirect_url=${encodeURIComponent(callbackUrl)}`
       await Linking.openURL(googleAuthUrl)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to initiate Google sign-in.')
@@ -77,6 +79,7 @@ export function LoginScreen() {
       setSubmitting(false)
     }
   }
+
 
   return (
     <Screen>

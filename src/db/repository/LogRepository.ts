@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { withSafeTransaction } from '../transaction'
 import type { ActivityLog } from '@/api/types'
 
 interface LogRow {
@@ -87,7 +88,7 @@ export class LogRepository {
   async upsertFromServer(logs: ActivityLog[]): Promise<void> {
     if (logs.length === 0) return
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       for (const log of logs) {
         const existing = await this.db.getFirstAsync<{ version: number }>(
           'SELECT version FROM activity_log WHERE id = ?;',
@@ -158,7 +159,7 @@ export class LogRepository {
    * Uses a client-generated id (UUID v4). The outbox will reconcile with server.
    */
   async optimisticCreate(log: ActivityLog): Promise<void> {
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       await this.db.runAsync(
         `INSERT OR REPLACE INTO activity_log (
           id, activity_id, date, status, note, amount, payload_json, version, created_at, updated_at
@@ -205,7 +206,7 @@ export class LogRepository {
   ): Promise<void> {
     const now = new Date().toISOString()
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       if (amount !== undefined || payload !== undefined) {
         await this.db.runAsync(
           'UPDATE activity_log SET status = ?, amount = ?, payload_json = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;',
@@ -251,7 +252,7 @@ export class LogRepository {
    */
   async markDeleted(id: string): Promise<void> {
     const now = new Date().toISOString()
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       await this.db.runAsync(
         'UPDATE activity_log SET deleted_at = ?, updated_at = ? WHERE id = ?;',
         [now, now, id]

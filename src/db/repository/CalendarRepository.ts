@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite'
+import { withSafeTransaction } from '../transaction'
 import { normalizeColor, darkPalette } from '@/theme/tokens'
 
 export interface LocalCalendarEvent {
@@ -107,7 +108,7 @@ export class CalendarRepository {
   async upsertEvents(events: LocalCalendarEvent[]): Promise<void> {
     if (events.length === 0) return
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       for (const event of events) {
         await this.db.runAsync(
           `INSERT INTO calendar_event (
@@ -180,7 +181,7 @@ export class CalendarRepository {
   async markDeleted(id: string): Promise<void> {
     const now = new Date().toISOString()
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       await this.db.runAsync(
         'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE id = ?;',
         [now, id]
@@ -195,7 +196,7 @@ export class CalendarRepository {
   async clearCalendar(calendarId: string): Promise<void> {
     const now = new Date().toISOString()
 
-    await this.db.withTransactionAsync(async () => {
+    await withSafeTransaction(this.db, async () => {
       await this.db.runAsync(
         'UPDATE calendar_event SET is_deleted = 1, updated_at = ? WHERE calendar_id = ?;',
         [now, calendarId]

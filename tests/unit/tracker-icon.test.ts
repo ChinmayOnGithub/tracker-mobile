@@ -93,6 +93,21 @@ describe('TrackerIcon Semantic Registry', () => {
     expect(iconCustom?.props.size).toBe(40)
   })
 
+  it('renders web canonical icon names accurately', () => {
+    const webIcons = ['Activity', 'Apple', 'Bell', 'Briefcase', 'CheckSquare', 'DollarSign', 'Dumbbell', 'JapaMala', 'Sparkles']
+    for (const name of webIcons) {
+      const rendered = TrackerIcon({ name })
+      expect(rendered).not.toBeNull()
+      expect(rendered?.type).toBeDefined()
+    }
+  })
+
+  it('safely falls back to generic Activity icon for unknown names without crashing or returning null', () => {
+    const rendered = TrackerIcon({ name: 'CompletelyUnknownNonExistentIcon' })
+    expect(rendered).not.toBeNull()
+    expect(rendered?.type).toBeDefined()
+  })
+
   it('applies disabled color when disabled prop is true', () => {
     const active = TrackerIcon({ name: 'trash', color: '#ff7557' })
     const disabled = TrackerIcon({ name: 'trash', color: '#ff7557', disabled: true })
@@ -101,3 +116,4 @@ describe('TrackerIcon Semantic Registry', () => {
     expect(disabled?.props.color).not.toBe('#ff7557')
   })
 })
+

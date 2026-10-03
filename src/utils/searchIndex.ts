@@ -25,7 +25,7 @@ function journalDocument(entry: JournalEntry): SearchDocument {
   return {
     entityType: 'journal',
     entityId: entry.id,
-    title: entry.date,
+    title: entry.journalDate,
     body: [
       entry.content,
       entry.gratitude,
