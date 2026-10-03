@@ -102,6 +102,18 @@ export interface WorkSession {
   updatedAt?: string
 }
 
+export interface WorkSessionResponse {
+  activeSession: WorkSession | null
+  sessionForDate: WorkSession | null
+  weekDates?: string[]
+  weekSessions?: WorkSession[]
+  rangeSessions?: WorkSession[]
+  weeklyTotalHours?: number
+  weeklyOfficeHours?: number
+  weeklyWfhHours?: number
+  weeklyGoal?: number
+}
+
 export interface WeightRecord {
   id: string
   userId: string

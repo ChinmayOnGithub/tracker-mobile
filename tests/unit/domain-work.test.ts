@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'bun:test'
-import { WorkSessionStateMachine } from '@/domain/work'
+import {
+  WorkSessionStateMachine,
+  getWeekDates,
+  formatHoursTwoDecimals,
+  formatTimer,
+  isWeekend,
+  calculateSessionSeconds,
+  calculateSessionHours,
+} from '@/domain/work'
 
 describe('Domain Work Session State Machine', () => {
   it('calculates elapsed time accurately with pauses and resumes', () => {
@@ -47,5 +55,43 @@ describe('Domain Work Session State Machine', () => {
     machine.resume(resume13)
     const now14 = new Date('2026-10-01T14:00:00Z')
     expect(machine.getElapsedSeconds(now14)).toBe(14400) // 4 hours = 14400s
+  })
+
+  it('guarantees all 7 days of the week starting Monday and ending Sunday', () => {
+    const week = getWeekDates('2026-10-03', 'monday') // Saturday Oct 3, 2026
+    expect(week).toHaveLength(7)
+    expect(week[0]).toBe('2026-09-28') // Monday
+    expect(week[1]).toBe('2026-09-29') // Tuesday
+    expect(week[2]).toBe('2026-09-30') // Wednesday
+    expect(week[3]).toBe('2026-10-01') // Thursday
+    expect(week[4]).toBe('2026-10-02') // Friday
+    expect(week[5]).toBe('2026-10-03') // Saturday (weekend comp-off)
+    expect(week[6]).toBe('2026-10-04') // Sunday (weekend comp-off)
+
+    expect(isWeekend(week[5])).toBe(true)
+    expect(isWeekend(week[6])).toBe(true)
+    expect(isWeekend(week[0])).toBe(false)
+  })
+
+  it('formats hours with exact 2 decimal accuracy', () => {
+    expect(formatHoursTwoDecimals(8.25)).toBe('8.25h')
+    expect(formatHoursTwoDecimals(4.5)).toBe('4.50h')
+    expect(formatHoursTwoDecimals(0)).toBe('0.00h')
+    expect(formatHoursTwoDecimals(8)).toBe('8.00h')
+    expect(formatHoursTwoDecimals(8.333333)).toBe('8.33h')
+  })
+
+  it('preserves elapsed seconds and never resets on pause', () => {
+    // Paused session with 45 seconds accumulated
+    const session = {
+      status: 'PAUSED',
+      startedAt: null,
+      durationSeconds: 45,
+      durationMinutes: 1,
+    }
+    const seconds = calculateSessionSeconds(session)
+    expect(seconds).toBe(45)
+    expect(formatTimer(seconds)).toBe('00:00:45')
+    expect(formatHoursTwoDecimals(calculateSessionHours(session))).toBe('0.01h')
   })
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -6,18 +6,34 @@ import {
   TextInput,
   View,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
 import { TrackerIcon } from '@/components/TrackerIcon'
-import { trackerApi, type WorkSession } from '@/api/client'
+import { trackerApi, type WorkSession, type WorkSessionResponse } from '@/api/client'
+import {
+  calculateSessionHours,
+  formatHoursTwoDecimals,
+  formatTimer,
+  getDayOfMonth,
+  getDayShortName,
+  getWeekDates,
+  isWeekend,
+} from '@/domain/work'
 import { colors, radius, spacing, typography } from '@/theme/tokens'
+import { todayYmd } from '@/utils/date'
 
 interface WorkSessionCardProps {
   date: string
+  onSelectDate?: (date: string) => void
 }
 
-export function WorkSessionCard({ date }: WorkSessionCardProps) {
+export function WorkSessionCard({ date, onSelectDate }: WorkSessionCardProps) {
+  const router = useRouter()
+  const today = todayYmd()
+
   const [session, setSession] = useState<WorkSession | null>(null)
+  const [weekData, setWeekData] = useState<WorkSessionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -27,28 +43,29 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
   const [loggingType, setLoggingType] = useState<'timer' | 'manual'>('timer')
   const [workMode, setWorkMode] = useState<'office' | 'wfh'>('office')
   const [inTime, setInTime] = useState<string>('')
-  const [manualHours, setManualHours] = useState<string>('8.0')
+  const [manualHours, setManualHours] = useState<string>('8.00')
 
-  useEffect(() => {
-    let mounted = true
-    trackerApi
-      .getWorkSession(date)
-      .then((res) => {
-        if (mounted) {
-          const current = res.activeSession || res.sessionForDate || null
-          setSession(current)
-          setLoading(false)
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setLoading(false)
-        }
-      })
-    return () => {
-      mounted = false
+  // Load session and week data
+  const loadData = useCallback(async () => {
+    try {
+      const res = await trackerApi.getWorkSession(date)
+      setWeekData(res)
+      const current =
+        (res.activeSession?.date === date ? res.activeSession : null) ||
+        res.sessionForDate ||
+        res.activeSession ||
+        null
+      setSession(current)
+    } catch {
+      // Ignore network errors on initial load
+    } finally {
+      setLoading(false)
     }
   }, [date])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   // Timer interval for active session
   useEffect(() => {
@@ -57,9 +74,14 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
     }
 
     const started = new Date(session.startedAt).getTime()
+    const baseSeconds =
+      session.durationSeconds && session.durationSeconds > 0
+        ? session.durationSeconds
+        : (session.durationMinutes || 0) * 60
+
     const computeElapsed = () => {
       const segSeconds = Math.max(0, Math.floor((Date.now() - started) / 1000))
-      return (session.durationMinutes || 0) * 60 + segSeconds
+      return baseSeconds + segSeconds
     }
 
     const timerId = setTimeout(() => {
@@ -76,13 +98,10 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
     }
   }, [session])
 
-  const formatTimer = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
-  }
+  // All 7 days of the week (Monday through Sunday)
+  const weekDays = useMemo(() => {
+    return getWeekDates(date, 'monday')
+  }, [date])
 
   const handleStartTimer = async () => {
     setActionLoading(true)
@@ -95,6 +114,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
       )
       setSession(res.session)
       setInTime('')
+      await loadData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start timer')
     } finally {
@@ -105,7 +125,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
   const handleLogManual = async () => {
     const hours = parseFloat(manualHours)
     if (isNaN(hours) || hours <= 0 || hours > 24) {
-      setError('Please enter a valid duration between 0.5 and 24 hours')
+      setError('Please enter a valid duration between 0.25 and 24 hours')
       return
     }
 
@@ -115,6 +135,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
       const durationMinutes = Math.round(hours * 60)
       const res = await trackerApi.logManualWorkSession(date, workMode, durationMinutes)
       setSession(res.session)
+      await loadData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to log manual session')
     } finally {
@@ -123,12 +144,36 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
   }
 
   const handlePause = async () => {
-    if (!session) return
+    if (!session || session.status !== 'ACTIVE') return
+    const now = Date.now()
+    const started = session.startedAt ? new Date(session.startedAt).getTime() : now
+    const segSeconds = Math.max(0, Math.floor((now - started) / 1000))
+    const baseSeconds =
+      session.durationSeconds && session.durationSeconds > 0
+        ? session.durationSeconds
+        : (session.durationMinutes || 0) * 60
+    const totalAccumulated = baseSeconds + segSeconds
+
+    // Optimistically freeze timer immediately
+    setSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: 'PAUSED',
+            startedAt: null,
+            durationSeconds: totalAccumulated,
+            durationMinutes: Math.round(totalAccumulated / 60),
+          }
+        : null
+    )
+    setElapsedSeconds(totalAccumulated)
+
     setActionLoading(true)
     setError(null)
     try {
       const res = await trackerApi.pauseWorkSession(session.id)
       setSession(res.session)
+      await loadData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to pause session')
     } finally {
@@ -137,12 +182,25 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
   }
 
   const handleResume = async () => {
-    if (!session) return
+    if (!session || session.status !== 'PAUSED') return
+    const nowIso = new Date().toISOString()
+
+    setSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: 'ACTIVE',
+            startedAt: nowIso,
+          }
+        : null
+    )
+
     setActionLoading(true)
     setError(null)
     try {
       const res = await trackerApi.resumeWorkSession(session.id)
       setSession(res.session)
+      await loadData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resume session')
     } finally {
@@ -152,11 +210,37 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
 
   const handleFinish = async () => {
     if (!session) return
+    const now = Date.now()
+    let totalSec =
+      session.durationSeconds && session.durationSeconds > 0
+        ? session.durationSeconds
+        : (session.durationMinutes || 0) * 60
+
+    if (session.status === 'ACTIVE' && session.startedAt) {
+      const segSeconds = Math.max(0, Math.floor((now - new Date(session.startedAt).getTime()) / 1000))
+      totalSec += segSeconds
+    }
+
+    setSession((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: 'COMPLETED',
+            startedAt: null,
+            endedAt: new Date().toISOString(),
+            durationSeconds: totalSec,
+            durationMinutes: Math.round(totalSec / 60),
+          }
+        : null
+    )
+    setElapsedSeconds(totalSec)
+
     setActionLoading(true)
     setError(null)
     try {
       const res = await trackerApi.finishWorkSession(session.id)
       setSession(res.session)
+      await loadData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to finish session')
     } finally {
@@ -174,55 +258,239 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
 
   const displaySeconds = isRunning
     ? elapsedSeconds
-    : (session?.durationMinutes || 0) * 60
+    : session?.durationSeconds && session.durationSeconds > 0
+      ? session.durationSeconds
+      : (session?.durationMinutes || 0) * 60
+
+  const trackedHours = displaySeconds / 3600
+  const weeklyOfficeHours = weekData?.weeklyOfficeHours || 0
+  const weeklyGoal = weekData?.weeklyGoal || 40.0
+  const completedBarWidth = Math.min(100, (weeklyOfficeHours / weeklyGoal) * 100)
+  const isGoalMet = weeklyOfficeHours >= weeklyGoal
 
   return (
     <Card style={styles.card}>
-      {/* Header */}
+      {/* Header Row */}
       <View style={styles.headerRow}>
         <View style={styles.titleGroup}>
           <TrackerIcon name="briefcase" size="sm" color={colors.primary} />
-          <Text style={styles.title}>Work Session</Text>
+          <Text style={styles.title}>Work Hours Tracker</Text>
         </View>
 
-        {session ? (
-          <View
-            style={[
-              styles.modeBadge,
-              isRunning && styles.modeBadgeActive,
-              isCompleted && styles.modeBadgeCompleted,
-            ]}
+        <View style={styles.headerActions}>
+          {session ? (
+            <View
+              style={[
+                styles.modeBadge,
+                isRunning && styles.modeBadgeActive,
+                isPaused && styles.modeBadgePaused,
+                isCompleted && styles.modeBadgeCompleted,
+              ]}
+            >
+              <Text style={styles.modeText}>
+                {session.mode.toUpperCase()} • {session.status}
+              </Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            accessibilityLabel="View full work analytics and history"
+            onPress={() => router.push('/work')}
+            style={styles.analyticsIconBtn}
           >
-            <Text style={styles.modeText}>
-              {session.mode.toUpperCase()} • {session.status}
-            </Text>
-          </View>
-        ) : null}
+            <TrackerIcon name="bar-chart-2" size="xs" color={colors.textMuted} />
+          </Pressable>
+        </View>
+      </View>
+
+      {/* 7-Day Week Blocks with 2-Decimal Precision */}
+      <View style={styles.weekBlocksSection}>
+        <View style={styles.weekBlocksHeader}>
+          <Text style={styles.sectionSubtitle}>WEEK PRESENCE (MON – SUN)</Text>
+          <Text style={styles.sectionMeta}>
+            Total: {formatHoursTwoDecimals(weekData?.weeklyTotalHours || 0)}
+          </Text>
+        </View>
+
+        <View style={styles.weekGrid}>
+          {weekDays.map((d) => {
+            const isSelected = d === date
+            const isCurrentDay = d === today
+            const isWknd = isWeekend(d)
+            const daySession = weekData?.weekSessions?.find((s) => s.date === d)
+            const hours = daySession ? calculateSessionHours(daySession) : 0
+            const isCompOff = isWknd && hours > 0
+
+            return (
+              <Pressable
+                key={d}
+                accessibilityLabel={`Day ${d}, worked ${formatHoursTwoDecimals(hours)}`}
+                onPress={() => onSelectDate?.(d)}
+                style={[
+                  styles.dayBlock,
+                  isSelected && styles.dayBlockSelected,
+                  isCurrentDay && !isSelected && styles.dayBlockToday,
+                  isCompOff && styles.dayBlockCompOff,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dayShortName,
+                    isWknd && styles.dayShortNameWeekend,
+                    isSelected && styles.dayShortNameSelected,
+                  ]}
+                >
+                  {getDayShortName(d)}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.dayNumber,
+                    isSelected && styles.dayNumberSelected,
+                  ]}
+                >
+                  {getDayOfMonth(d)}
+                </Text>
+
+                {/* Hours worked with exact 2 decimal accuracy */}
+                <Text
+                  style={[
+                    styles.dayHours,
+                    hours > 0 && styles.dayHoursWorked,
+                    isCompOff && styles.dayHoursCompOff,
+                    isSelected && styles.dayHoursSelected,
+                  ]}
+                >
+                  {formatHoursTwoDecimals(hours)}
+                </Text>
+
+                {/* Status indicator tag */}
+                <View style={styles.statusIndicator}>
+                  {isCompOff ? (
+                    <Text style={styles.compOffTag}>Comp</Text>
+                  ) : daySession?.mode === 'office' ? (
+                    <View style={[styles.modeDot, { backgroundColor: colors.success }]} />
+                  ) : daySession?.mode === 'wfh' ? (
+                    <View style={[styles.modeDot, { backgroundColor: colors.warning }]} />
+                  ) : (
+                    <Text style={styles.dashText}>-</Text>
+                  )}
+                </View>
+              </Pressable>
+            )
+          })}
+        </View>
       </View>
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {/* Timer / Summary Display */}
-      <View style={styles.timerRow}>
-        <Text style={[styles.timerDigits, isRunning && styles.timerDigitsActive]}>
-          {isCompleted
-            ? `${Math.floor((session?.durationMinutes || 0) / 60)}h ${(session?.durationMinutes || 0) % 60}m`
-            : formatTimer(displaySeconds)}
-        </Text>
-        <Text style={styles.timerLabel}>
-          {isCompleted
-            ? 'Total time logged today'
-            : isRunning
-              ? 'Session in progress'
-              : isPaused
-                ? 'Session paused'
-                : 'Ready to track'}
-        </Text>
+      {/* Main Timer / Current Day Summary Display */}
+      <View style={styles.timerDisplayContainer}>
+        {isRunning ? (
+          <View style={styles.activeDisplayBox}>
+            <View style={styles.activeHeaderRow}>
+              <View style={styles.livePulseDot} />
+              <Text style={styles.activeLabel}>
+                ACTIVE SESSION ({session?.mode.toUpperCase()})
+              </Text>
+              <Text style={styles.inTimeLabel}>
+                {session?.startedAt ? `Started at ${new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'In progress'}
+              </Text>
+            </View>
+
+            <Text style={styles.timerDigitsActive}>
+              {formatTimer(displaySeconds)}
+            </Text>
+            <Text style={styles.decimalHoursActive}>
+              ({formatHoursTwoDecimals(trackedHours)} tracked today)
+            </Text>
+
+            <View style={styles.buttonRow}>
+              <Button
+                disabled={actionLoading}
+                label="Pause"
+                onPress={handlePause}
+                size="sm"
+                style={styles.actionBtn}
+                variant="outline"
+              />
+              <Button
+                disabled={actionLoading}
+                label="Finish Session"
+                onPress={handleFinish}
+                size="sm"
+                style={styles.actionBtn}
+                variant="primary"
+              />
+            </View>
+          </View>
+        ) : isPaused ? (
+          <View style={styles.pausedDisplayBox}>
+            <View style={styles.pausedHeaderRow}>
+              <TrackerIcon name="clock" size="xs" color={colors.warning} />
+              <Text style={styles.pausedLabel}>
+                SESSION PAUSED ({session?.mode.toUpperCase()})
+              </Text>
+            </View>
+
+            <Text style={styles.timerDigitsPaused}>
+              {formatTimer(displaySeconds)}
+            </Text>
+            <Text style={styles.pausedSubtext}>
+              Accumulated time preserved ({formatHoursTwoDecimals(trackedHours)})
+            </Text>
+
+            <View style={styles.buttonRow}>
+              <Button
+                disabled={actionLoading}
+                label="Resume"
+                onPress={handleResume}
+                size="sm"
+                style={styles.actionBtn}
+                variant="primary"
+              />
+              <Button
+                disabled={actionLoading}
+                label="Finish Day"
+                onPress={handleFinish}
+                size="sm"
+                style={styles.actionBtn}
+                variant="outline"
+              />
+            </View>
+          </View>
+        ) : isCompleted ? (
+          <View style={styles.completedDisplayBox}>
+            <View style={styles.completedHeaderRow}>
+              <TrackerIcon name="check" size="xs" color={colors.success} />
+              <Text style={styles.completedLabel}>
+                COMPLETED DAY ({session?.mode.toUpperCase()})
+              </Text>
+            </View>
+
+            <Text style={styles.completedHoursDigits}>
+              {formatHoursTwoDecimals(trackedHours)}
+            </Text>
+
+            <Text style={styles.completedDetails}>
+              Recorded for {date} • {session?.loggingMode === 'manual' ? 'Manual entry' : 'Timer tracked'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.idleDisplayBox}>
+            <Text style={styles.idleDigits}>00:00:00</Text>
+            <Text style={styles.idleLabel}>Ready to track work on {date}</Text>
+          </View>
+        )}
       </View>
 
-      {/* Controls */}
-      {!session || (!isRunning && !isPaused && !isCompleted) ? (
+      {/* Detailed Controls Visible By Default (when idle or completed) */}
+      {(!session || !isRunning && !isPaused) && (
         <View style={styles.setupContainer}>
+          <Text style={styles.controlsHeader}>
+            {isCompleted ? 'Log Additional Session / Hours' : 'Start or Log Work'}
+          </Text>
+
           {/* Mode Switch: Timer vs Manual */}
           <View style={styles.segmentedControl}>
             <Pressable
@@ -272,7 +540,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
 
           {/* Location Toggle: Office vs WFH */}
           <View style={styles.locationRow}>
-            <Text style={styles.label}>Location:</Text>
+            <Text style={styles.label}>Work Location:</Text>
             <View style={styles.locationPills}>
               <Pressable
                 onPress={() => setWorkMode('office')}
@@ -309,6 +577,7 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
             </View>
           </View>
 
+          {/* Controls body */}
           {loggingType === 'timer' ? (
             <View style={styles.timerInputs}>
               <View style={styles.inputRow}>
@@ -334,23 +603,23 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
           ) : (
             <View style={styles.manualInputs}>
               <View style={styles.inputRow}>
-                <Text style={styles.label}>Hours worked:</Text>
+                <Text style={styles.label}>Hours worked (2 decimal):</Text>
                 <TextInput
                   keyboardType="numeric"
-                  placeholder="8.0"
+                  placeholder="8.00"
                   placeholderTextColor={colors.textMuted}
                   value={manualHours}
                   onChangeText={setManualHours}
-                  maxLength={4}
+                  maxLength={5}
                   style={styles.timeInput}
                 />
               </View>
               {/* Presets */}
               <View style={styles.presetRow}>
-                {[4, 6, 8, 9].map((h) => (
+                {['4.00', '6.00', '8.00', '9.00'].map((h) => (
                   <Pressable
                     key={h}
-                    onPress={() => setManualHours(String(h))}
+                    onPress={() => setManualHours(h)}
                     style={styles.presetChip}
                   >
                     <Text style={styles.presetText}>{h}h</Text>
@@ -368,61 +637,43 @@ export function WorkSessionCard({ date }: WorkSessionCardProps) {
             </View>
           )}
         </View>
-      ) : isRunning ? (
-        <View style={styles.buttonGroup}>
-          <Button
-            disabled={actionLoading}
-            label="Pause"
-            onPress={handlePause}
-            size="sm"
-            style={styles.actionBtn}
-            variant="outline"
-          />
-          <Button
-            disabled={actionLoading}
-            label="Finish"
-            onPress={handleFinish}
-            size="sm"
-            style={styles.actionBtn}
-            variant="primary"
+      )}
+
+      {/* Weekly Goal Progress Bar */}
+      <View style={styles.weeklyProgressContainer}>
+        <View style={styles.weeklyHeader}>
+          <Text style={styles.weeklyLabel}>Weekly Office Presence</Text>
+          <Text style={styles.weeklyValue}>
+            {formatHoursTwoDecimals(weeklyOfficeHours)} / {formatHoursTwoDecimals(weeklyGoal)}
+          </Text>
+        </View>
+
+        <View style={styles.progressBarTrack}>
+          <View
+            style={[
+              styles.progressBarFill,
+              { width: `${completedBarWidth}%` },
+            ]}
           />
         </View>
-      ) : isPaused ? (
-        <View style={styles.buttonGroup}>
-          <Button
-            disabled={actionLoading}
-            label="Resume"
-            onPress={handleResume}
-            size="sm"
-            style={styles.actionBtn}
-            variant="primary"
-          />
-          <Button
-            disabled={actionLoading}
-            label="Finish"
-            onPress={handleFinish}
-            size="sm"
-            style={styles.actionBtn}
-            variant="outline"
-          />
-        </View>
-      ) : (
-        <View style={styles.completedSection}>
-          <View style={styles.completedRow}>
-            <TrackerIcon name="check" size="sm" color={colors.success} />
-            <Text style={styles.completedText}>Work session completed for this day</Text>
-          </View>
+
+        <View style={styles.weeklyFooter}>
+          <Text style={styles.weeklyStatusText}>
+            {isGoalMet
+              ? '🎉 Weekly Office Goal Achieved!'
+              : `${formatHoursTwoDecimals(Math.max(0, weeklyGoal - weeklyOfficeHours))} remaining`}
+          </Text>
+
           <Pressable
-            onPress={() => {
-              setSession(null)
-              setLoggingType('timer')
-            }}
-            style={styles.logAgainBtn}
+            accessibilityLabel="Open Work Tracker dedicated screen"
+            onPress={() => router.push('/work')}
+            style={styles.viewAnalyticsLink}
           >
-            <Text style={styles.logAgainText}>+ Log Additional Work</Text>
+            <Text style={styles.viewAnalyticsText}>Full Analytics & History</Text>
+            <TrackerIcon name="arrow-right" size={10} color={colors.primary} />
           </Pressable>
         </View>
-      )}
+      </View>
     </Card>
   )
 }
@@ -449,6 +700,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   modeBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
@@ -461,6 +717,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySubtle,
     borderColor: colors.primary,
   },
+  modeBadgePaused: {
+    backgroundColor: colors.warningSubtle,
+    borderColor: colors.warning,
+  },
   modeBadgeCompleted: {
     backgroundColor: colors.successSubtle,
     borderColor: colors.success,
@@ -471,35 +731,269 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.5,
   },
+  analyticsIconBtn: {
+    padding: 6,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+  },
+  weekBlocksSection: {
+    gap: spacing.xs,
+  },
+  weekBlocksHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionSubtitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  sectionMeta: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  weekGrid: {
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'space-between',
+  },
+  dayBlock: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    minHeight: 70,
+    justifyContent: 'space-between',
+  },
+  dayBlockSelected: {
+    borderColor: colors.primary,
+    borderWidth: 1.5,
+    backgroundColor: colors.surface,
+  },
+  dayBlockToday: {
+    borderColor: colors.textMuted,
+  },
+  dayBlockCompOff: {
+    borderColor: colors.sky,
+    backgroundColor: colors.skySubtle,
+  },
+  dayShortName: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  dayShortNameWeekend: {
+    color: colors.sky,
+  },
+  dayShortNameSelected: {
+    color: colors.primary,
+  },
+  dayNumber: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dayNumberSelected: {
+    color: colors.primary,
+    fontWeight: '800',
+  },
+  dayHours: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  dayHoursWorked: {
+    color: colors.text,
+    fontWeight: '800',
+  },
+  dayHoursCompOff: {
+    color: colors.sky,
+    fontWeight: '800',
+  },
+  dayHoursSelected: {
+    color: colors.primary,
+  },
+  statusIndicator: {
+    height: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compOffTag: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: colors.sky,
+    textTransform: 'uppercase',
+  },
+  modeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dashText: {
+    fontSize: 8,
+    color: colors.textMuted,
+  },
   errorText: {
     color: colors.danger,
     fontSize: typography.xs.fontSize,
     paddingHorizontal: spacing.xs,
   },
-  timerRow: {
-    alignItems: 'center',
+  timerDisplayContainer: {
     paddingVertical: spacing.xs,
-    gap: 2,
   },
-  timerDigits: {
-    fontSize: 32,
+  activeDisplayBox: {
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.primary,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  activeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  livePulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  activeLabel: {
+    fontSize: 10,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.primary,
+    letterSpacing: 0.5,
+  },
+  inTimeLabel: {
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+  timerDigitsActive: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: colors.primary,
     fontVariant: ['tabular-nums'],
     letterSpacing: 1,
   },
-  timerDigitsActive: {
-    color: colors.coral,
-  },
-  timerLabel: {
-    fontSize: typography.xs.fontSize,
+  decimalHoursActive: {
+    fontSize: 11,
+    fontWeight: '600',
     color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  pausedDisplayBox: {
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.warning,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  pausedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pausedLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.warning,
+    letterSpacing: 0.5,
+  },
+  timerDigitsPaused: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.warning,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 1,
+  },
+  pausedSubtext: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  completedDisplayBox: {
+    alignItems: 'center',
+    padding: spacing.md,
+    backgroundColor: colors.successSubtle,
+    borderColor: colors.success,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    gap: 4,
+  },
+  completedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  completedLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.success,
+    letterSpacing: 0.5,
+  },
+  completedHoursDigits: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.success,
+    fontVariant: ['tabular-nums'],
+  },
+  completedDetails: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  idleDisplayBox: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    gap: 2,
+  },
+  idleDigits: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  idleLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
+    marginTop: spacing.xs,
+  },
+  actionBtn: {
+    flex: 1,
   },
   setupContainer: {
     gap: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.borderMuted,
     paddingTop: spacing.sm,
+  },
+  controlsHeader: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
   },
   segmentedControl: {
     flexDirection: 'row',
@@ -597,7 +1091,7 @@ const styles = StyleSheet.create({
   },
   presetChip: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 4,
     backgroundColor: colors.surfaceRaised,
     borderRadius: radius.sm,
     borderWidth: 1,
@@ -605,40 +1099,65 @@ const styles = StyleSheet.create({
   },
   presetText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.textMuted,
   },
   fullBtn: {
     width: '100%',
   },
-  buttonGroup: {
+  weeklyProgressContainer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderMuted,
+    paddingTop: spacing.sm,
+    gap: 6,
+  },
+  weeklyHeader: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    width: '100%',
-  },
-  actionBtn: {
-    flex: 1,
-  },
-  completedSection: {
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.xs,
   },
-  completedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  completedText: {
-    fontSize: typography.xs.fontSize,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  logAgainBtn: {
-    paddingVertical: spacing.xs,
-  },
-  logAgainText: {
+  weeklyLabel: {
     fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  weeklyValue: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  progressBarTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.borderMuted,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.success,
+    borderRadius: 4,
+  },
+  weeklyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weeklyStatusText: {
+    fontSize: 10,
     fontWeight: '600',
+    color: colors.textMuted,
+  },
+  viewAnalyticsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  viewAnalyticsText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: colors.primary,
   },
 })

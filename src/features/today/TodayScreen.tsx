@@ -825,7 +825,7 @@ export function TodayScreen() {
 
       {/* Secondary Dashboard Widgets */}
       <View style={styles.widgetsSection}>
-        <WorkSessionCard date={selectedDate} />
+        <WorkSessionCard date={selectedDate} onSelectDate={setSelectedDate} />
         <LeaveWidgetCard selectedDate={selectedDate} onLeaveChanged={() => void load()} />
         <JournalWidgetCard date={selectedDate} />
         <DailyCodingCard date={selectedDate} />

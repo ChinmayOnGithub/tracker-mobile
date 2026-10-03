@@ -20,6 +20,7 @@ import type {
   UpdateTemplateInput,
   WeightRecord,
   WorkSession,
+  WorkSessionResponse,
 } from './types'
 
 export const TOKEN_KEY = 'tracker.session.token'
@@ -324,9 +325,13 @@ export const trackerApi = {
     )
   },
 
-  async getWorkSession(date?: string) {
-    const q = date ? `?date=${encodeURIComponent(date)}` : ''
-    return performFetch<{ activeSession: WorkSession | null; sessionForDate: WorkSession | null }>(
+  async getWorkSession(date?: string, startDate?: string, endDate?: string) {
+    const params = new URLSearchParams()
+    if (date) params.append('date', date)
+    if (startDate) params.append('startDate', startDate)
+    if (endDate) params.append('endDate', endDate)
+    const q = params.toString() ? `?${params.toString()}` : ''
+    return performFetch<WorkSessionResponse>(
       `/api/mobile/v1/work/session${q}`
     )
   },
