@@ -504,6 +504,13 @@ export const trackerApi = {
     })
   },
 
+  async resetOnboarding() {
+    return performFetch<{ state: OnboardingState }>('/api/mobile/v1/onboarding', {
+      method: 'DELETE',
+      retries: 0,
+    })
+  },
+
   async getCalendarMonth(month?: string, timezone?: string) {
     const params = new URLSearchParams()
     if (month) params.set('month', month)

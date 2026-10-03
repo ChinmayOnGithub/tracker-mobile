@@ -289,6 +289,67 @@ export function TodayScreen() {
     }
   }
 
+  // Schedule an existing Activity/Template for selectedDate (no duplicate template created)
+  const handleScheduleExistingActivity = async (template: ActivityTemplate) => {
+    // If an occurrence already exists on this date, don't duplicate
+    const alreadyPresent = tasks.some((t) => t.templateId === template.id)
+    if (alreadyPresent) return
+
+    const clientLogId = generateLocalUuid()
+    const mutationId = generateLocalUuid()
+    const outboxId = generateLocalUuid()
+    const now = new Date().toISOString()
+
+    const optimisticLog: ActivityLog = {
+      id: clientLogId,
+      activityId: template.id,
+      date: selectedDate,
+      status: 'cleared',
+      note: null,
+      amount: null,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    try {
+      await withSafeTransaction(db, async () => {
+        await logRepo.optimisticCreate(optimisticLog)
+        await outboxRepo.enqueue(
+          outboxId,
+          mutationId,
+          'activity_log',
+          clientLogId,
+          'create_log',
+          {
+            activityId: template.id,
+            date: selectedDate,
+            status: 'cleared',
+          }
+        )
+      })
+
+      setLogs((prev) => [...prev, optimisticLog])
+      appEvents.emit('tasks:changed')
+      appEvents.emit('calendar:changed')
+
+      try {
+        const res = await trackerApi.createLog({
+          activityId: template.id,
+          date: selectedDate,
+          status: 'cleared',
+        })
+        await db.runAsync('DELETE FROM activity_log WHERE id = ?;', [clientLogId])
+        await logRepo.upsertFromServer([res.log])
+        await outboxRepo.markDone(outboxId)
+        setLogs((prev) => prev.map((l) => (l.id === clientLogId ? res.log : l)))
+      } catch {
+        await outboxRepo.markFailed(outboxId, 'Network failed during task schedule')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to schedule activity.')
+    }
+  }
+
   // Checklist status cycling: optimistic update -> outbox enqueue -> API drain
   const handleCycleStatus = async (task: TaskOccurrence) => {
     const lockKey = task.templateId
@@ -443,7 +504,7 @@ export function TodayScreen() {
       // Special handling for postpone: updates template targetDate + creates postponed log
       if (targetStatus === 'postponed') {
         try {
-          const result = await trackerApi.postponeTask(
+          await trackerApi.postponeTask(
             task.templateId,
             selectedDate,
             task.logId || null
@@ -749,6 +810,8 @@ export function TodayScreen() {
 
         {/* Pinned Quick Task Add Bar */}
         <QuickTaskAddBar
+          templates={templates}
+          onSelectTemplate={handleScheduleExistingActivity}
           createTemplate={handleCreateQuickTask}
           onTaskCreated={(newT) => {
             setTemplates((prev) => {

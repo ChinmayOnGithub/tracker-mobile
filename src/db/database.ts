@@ -112,3 +112,22 @@ export async function cacheLogs(
     }
   })
 }
+
+/**
+ * Wipes all user-scoped data from local SQLite tables on sign out.
+ * Guarantees zero data leakage when a different user logs in.
+ */
+export async function clearUserLocalData(db: SQLiteDatabase): Promise<void> {
+  await withSafeTransaction(db, async () => {
+    await db.execAsync(`
+      DELETE FROM activity_log;
+      DELETE FROM activity_template;
+      DELETE FROM calendar_event;
+      DELETE FROM tracker_search;
+      DELETE FROM mutation_queue;
+      DELETE FROM tombstones;
+      DELETE FROM onboarding_state;
+      DELETE FROM sync_state;
+    `)
+  })
+}

@@ -7,13 +7,17 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react'
+import { useSQLiteContext } from 'expo-sqlite'
 import { clearToken, getToken, setToken, trackerApi } from '@/api/client'
 import type { MobileUser } from '@/api/types'
+import { clearUserLocalData } from '@/db'
+import { fastCache } from '@/utils/dataCache'
 import type { AuthContextValue } from './types'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: PropsWithChildren) {
+  const db = useSQLiteContext()
   const [user, setUser] = useState<MobileUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -87,10 +91,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   const logout = useCallback(async () => {
+    fastCache.clear()
+    try {
+      await clearUserLocalData(db)
+    } catch {
+      // Ignore if DB cannot be wiped or not accessible
+    }
     await clearToken()
     setUser(null)
     setError(null)
-  }, [])
+  }, [db])
 
   const value = useMemo<AuthContextValue>(
     () => ({

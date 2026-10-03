@@ -20,6 +20,7 @@ import {
   typography,
 } from '@/theme/tokens'
 import { LeaveModal } from '@/features/leave/LeaveModal'
+import { fastCache } from '@/utils/dataCache'
 
 export function SettingsScreen() {
   const { user, logout } = useAuth()
@@ -75,6 +76,35 @@ export function SettingsScreen() {
     } finally {
       setSyncingCalendar(false)
     }
+  }
+
+  const [resettingOnboarding, setResettingOnboarding] = useState<boolean>(false)
+
+  const handleResetOnboarding = () => {
+    Alert.alert(
+      'Reset Onboarding',
+      'Reset onboarding state to NOT_STARTED for testing? You will be navigated to the onboarding wizard.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            setResettingOnboarding(true)
+            try {
+              await trackerApi.resetOnboarding()
+              await db.execAsync('DELETE FROM onboarding_state;')
+              fastCache.clear()
+              router.replace('/(app)/onboarding')
+            } catch (err) {
+              Alert.alert('Reset Failed', err instanceof Error ? err.message : 'Failed to reset onboarding')
+            } finally {
+              setResettingOnboarding(false)
+            }
+          },
+        },
+      ]
+    )
   }
 
   const handleSignOut = () => {
@@ -376,6 +406,31 @@ export function SettingsScreen() {
         <View style={styles.item}>
           <Text style={[styles.label, { color: colors.textMuted }]}>Account Role</Text>
           <Text style={[styles.value, { color: colors.text }]}>{user?.isOwner ? 'Owner / Admin' : 'Member'}</Text>
+        </View>
+      </Card>
+
+      {/* Developer / Testing Card */}
+      <Card style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={styles.iconHeadingWrap}>
+            <View style={[styles.paletteIconWrap, { backgroundColor: `${colors.primary}22` }]}>
+              <TrackerIcon name="wrench" size="sm" color={colors.primary} />
+            </View>
+            <View style={styles.binCopyWrap}>
+              <Text style={[styles.cardHeading, { color: colors.text }]}>Developer & Testing</Text>
+              <Text style={[styles.cardSubtext, { color: colors.textMuted }]}>
+                Reset onboarding state to test first-day setup flow.
+              </Text>
+            </View>
+          </View>
+          <Button
+            label={resettingOnboarding ? 'Resetting...' : 'Reset'}
+            variant="outline"
+            size="sm"
+            onPress={handleResetOnboarding}
+            disabled={resettingOnboarding}
+            accessibilityLabel="Reset Onboarding for Testing"
+          />
         </View>
       </Card>
 

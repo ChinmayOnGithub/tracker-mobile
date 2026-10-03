@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from 'bun:test'
+import { describe, it, expect } from 'bun:test'
 import { withSafeTransaction } from '@/db/transaction'
 import type { SQLiteDatabase } from 'expo-sqlite'
 

@@ -38,6 +38,8 @@ export interface ActivityTemplate {
   sortOrder?: number
   notes?: string | null
   amount?: number | null
+  scheduledTime?: string | null
+  estimatedDuration?: number | null
   metadata?: string | Record<string, unknown> | null
   createdAt: string
   updatedAt: string

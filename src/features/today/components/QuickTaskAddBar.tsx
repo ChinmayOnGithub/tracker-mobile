@@ -10,22 +10,28 @@ import {
 import type { ActivityTemplate, CreateTemplateInput } from '@/api/client'
 import { TrackerIcon } from '@/components/TrackerIcon'
 import { colors, paletteColors, radius, spacing, typography } from '@/theme/tokens'
+import { ActivityPickerModal } from './ActivityPickerModal'
 
 interface QuickTaskAddBarProps {
   selectedDate: string
+  templates?: ActivityTemplate[]
   onTaskCreated: (template: ActivityTemplate) => void
+  onSelectTemplate?: (template: ActivityTemplate) => void
   createTemplate: (input: CreateTemplateInput) => Promise<ActivityTemplate>
 }
 
 export function QuickTaskAddBar({
   selectedDate,
+  templates = [],
   onTaskCreated,
+  onSelectTemplate,
   createTemplate,
 }: QuickTaskAddBarProps) {
   const [title, setTitle] = useState('')
   const [selectedColor, setSelectedColor] = useState<string>(paletteColors[0])
   const [isHabit, setIsHabit] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
+  const [pickerVisible, setPickerVisible] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -88,6 +94,18 @@ export function QuickTaskAddBar({
           style={styles.input}
           value={title}
         />
+
+        {onSelectTemplate && templates.length > 0 ? (
+          <Pressable
+            accessibilityLabel="Schedule from existing activities"
+            hitSlop={6}
+            onPress={() => setPickerVisible(true)}
+            style={styles.pickerTriggerBtn}
+          >
+            <TrackerIcon name="sparkles" size={13} color={colors.coral} />
+            <Text style={styles.pickerTriggerText}>Activities</Text>
+          </Pressable>
+        ) : null}
 
         {submitting ? (
           <View style={styles.actionBtn}>
@@ -174,6 +192,18 @@ export function QuickTaskAddBar({
           </View>
         </View>
       ) : null}
+
+      <ActivityPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        templates={templates}
+        onSelectTemplate={(t) => {
+          onSelectTemplate?.(t)
+        }}
+        onNewCustomTask={() => {
+          setShowOptions(true)
+        }}
+      />
     </View>
   )
 }
@@ -285,5 +315,21 @@ const styles = StyleSheet.create({
   colorDotSelected: {
     borderWidth: 2,
     borderColor: colors.white,
+  },
+  pickerTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.xs + 2,
+    height: 32,
+  },
+  pickerTriggerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.coral,
   },
 })

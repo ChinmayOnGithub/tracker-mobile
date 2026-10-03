@@ -188,7 +188,7 @@ export function SearchScreen() {
         <View style={styles.center}>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No results</Text>
           <Text style={[styles.emptyBody, { color: colors.textMuted }]}>
-            No items matched "{query.trim()}".
+            {`No items matched "${query.trim()}".`}
           </Text>
         </View>
       )
