@@ -62,6 +62,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="work"
+        options={{
+          title: 'Work',
+          tabBarAccessibilityLabel: 'Work tracker tab',
+          tabBarIcon: ({ color }) => (
+            <TrackerIcon name="clock" size="sm" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="journal"
         options={{
           title: 'Journal',
