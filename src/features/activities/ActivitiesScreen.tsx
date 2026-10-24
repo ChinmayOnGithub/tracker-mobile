@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, StyleSheet, Text, View } from 'react-native'
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useSQLiteContext } from 'expo-sqlite'
 import {
@@ -16,12 +16,13 @@ import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { OutboxRepository, TemplateRepository } from '@/db/repository'
 import { withSafeTransaction } from '@/db/transaction'
-import { colors, normalizeColor, spacing, typography } from '@/theme/tokens'
+import { colors, normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 import { fastCache } from '@/utils/dataCache'
 import { appEvents } from '@/utils/events'
 import { ActivityCard } from './components/ActivityCard'
 import { ActivityCategoryPills } from './components/ActivityCategoryPills'
-import { ActivityFormModal, type ActivityFormData } from './components/ActivityFormModal'
+import { ActivityFormModal, type ActivityFormData, type ActivityStarterPreset } from './components/ActivityFormModal'
+import { useTheme } from '@/theme/ThemeContext'
 
 function generateLocalUuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -30,6 +31,17 @@ function generateLocalUuid(): string {
     return v.toString(16)
   })
 }
+
+const ACTIVITY_STARTERS: (ActivityStarterPreset & { id: string; description: string })[] = [
+  { id: 'water', name: 'Water intake', description: 'Build a hydration habit', category: 'health', icon: 'droplet', color: '#38bdf8' },
+  { id: 'fuel', name: 'Fuel refill', description: 'Track fuel expenses', category: 'finance', icon: 'fuel', color: '#f59e0b' },
+  { id: 'jogging', name: 'Jogging / Running', description: 'Build a running routine', category: 'fitness', icon: 'activity', color: '#10b981' },
+  { id: 'workout', name: 'Workout', description: 'Track exercise sessions', category: 'fitness', icon: 'dumbbell', color: '#8b5cf6' },
+  { id: 'reading', name: 'Reading', description: 'Make time for books', category: 'learning', icon: 'book-open', color: '#6366f1' },
+  { id: 'sleep', name: 'Sleep', description: 'Track your sleep routine', category: 'health', icon: 'moon', color: '#8b5cf6' },
+  { id: 'meditation', name: 'Meditation', description: 'Mindfulness and calm', category: 'health', icon: 'brain', color: '#10b981' },
+  { id: 'study', name: 'Study session', description: 'Protect focused learning time', category: 'learning', icon: 'graduation-cap', color: '#f59e0b' },
+]
 
 const PRESET_CATEGORIES = ['all', 'work', 'personal', 'fitness', 'health', 'learning', 'finance']
 
@@ -43,7 +55,10 @@ export function ActivitiesScreen() {
   const [error, setError] = useState<string | null>(null)
 
   // Modal State
+  const { colors: themeColors } = useTheme()
   const [modalVisible, setModalVisible] = useState(false)
+  const [starterPickerVisible, setStarterPickerVisible] = useState(false)
+  const [starterData, setStarterData] = useState<ActivityStarterPreset | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<ActivityTemplate | null>(null)
   const [saving, setSaving] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
@@ -248,8 +263,9 @@ export function ActivitiesScreen() {
             size="sm"
             onPress={() => {
               setEditingTemplate(null)
+              setStarterData(null)
               setModalError(null)
-              setModalVisible(true)
+              setStarterPickerVisible(true)
             }}
             accessibilityLabel="Create new activity"
           />
@@ -304,10 +320,54 @@ export function ActivitiesScreen() {
         </View>
       )}
 
+      {/* Optional starter gallery; selecting a starter only prefills the form. */}
+      <Modal visible={starterPickerVisible} transparent animationType="slide" onRequestClose={() => setStarterPickerVisible(false)}>
+        <View style={[styles.starterOverlay, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+          <View style={[styles.starterPanel, { backgroundColor: themeColors.surface }]}>
+            <View style={styles.starterHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.starterTitle, { color: themeColors.text }]}>Create an activity</Text>
+                <Text style={[styles.starterSubtitle, { color: themeColors.textMuted }]}>Choose a starter and customize it, or start from scratch.</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close activity starters" onPress={() => setStarterPickerVisible(false)} style={styles.starterClose}>
+                <Text style={{ color: themeColors.text, fontSize: 22 }}>×</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.starterGrid}>
+              {ACTIVITY_STARTERS.map((starter) => (
+                <Pressable key={starter.id} accessibilityRole="button" onPress={() => {
+                  setStarterData(starter)
+                  setEditingTemplate(null)
+                  setModalError(null)
+                  setStarterPickerVisible(false)
+                  setModalVisible(true)
+                }} style={({ pressed }) => [styles.starterCard, { borderColor: themeColors.border, backgroundColor: pressed ? themeColors.surfaceRaised : themeColors.surface }]}>
+                  <View style={[styles.starterIcon, { backgroundColor: starter.color + '20' }]}>
+                    <TrackerIcon name={starter.icon} size="sm" color={starter.color} />
+                  </View>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={[styles.starterName, { color: themeColors.text }]}>{starter.name}</Text>
+                    <Text style={[styles.starterDescription, { color: themeColors.textMuted }]}>{starter.description}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Button label="Start from scratch" variant="secondary" onPress={() => {
+              setStarterData(null)
+              setEditingTemplate(null)
+              setModalError(null)
+              setStarterPickerVisible(false)
+              setModalVisible(true)
+            }} />
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal for Create / Edit Activity */}
       <ActivityFormModal
         error={modalError}
         initialData={editingTemplate}
+        starterData={starterData}
         onClose={() => {
           setEditingTemplate(null)
           setModalVisible(false)
@@ -321,6 +381,17 @@ export function ActivitiesScreen() {
 }
 
 const styles = StyleSheet.create({
+  starterOverlay: { flex: 1, justifyContent: 'flex-end' },
+  starterPanel: { maxHeight: '88%', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.md, gap: spacing.md },
+  starterHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  starterTitle: { fontSize: typography.lg.fontSize, lineHeight: typography.lg.lineHeight, fontWeight: '800' },
+  starterSubtitle: { fontSize: typography.sm.fontSize, lineHeight: typography.sm.lineHeight, marginTop: 3 },
+  starterClose: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  starterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingBottom: spacing.sm },
+  starterCard: { width: '48%', minHeight: 108, borderWidth: 1, borderRadius: radius.md, padding: spacing.sm, gap: spacing.sm },
+  starterIcon: { width: 36, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  starterName: { fontSize: typography.sm.fontSize, fontWeight: '700' },
+  starterDescription: { fontSize: typography.xs.fontSize, lineHeight: typography.xs.lineHeight },
   header: {
     gap: spacing.xs,
   },

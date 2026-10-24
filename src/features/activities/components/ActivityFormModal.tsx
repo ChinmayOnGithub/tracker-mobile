@@ -25,6 +25,8 @@ const RECURRENCE_OPTIONS: CreateTemplateInput['recurrenceType'][] = [
 ]
 const PRIORITY_OPTIONS = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
 
+export interface ActivityStarterPreset { name: string; category: string; color: string; icon: string; notes?: string }
+
 export interface ActivityFormData {
   id?: string
   name: string
@@ -41,6 +43,7 @@ interface ActivityFormModalProps {
   saving: boolean
   error: string | null
   initialData?: ActivityTemplate | null
+  starterData?: ActivityStarterPreset | null
   onClose: () => void
   onSubmit: (data: ActivityFormData) => Promise<void>
 }
@@ -50,6 +53,7 @@ export function ActivityFormModal({
   saving,
   error,
   initialData,
+  starterData,
   onClose,
   onSubmit,
 }: ActivityFormModalProps) {
@@ -76,6 +80,14 @@ export function ActivityFormModal({
       )
       setFormIcon(initialData.icon || 'activity')
       setFormNotes(initialData.notes || '')
+    } else if (starterData) {
+      setFormName(starterData.name)
+      setFormCategory(starterData.category)
+      setFormRecurrence('daily')
+      setFormColor(starterData.color)
+      setFormPriority('NORMAL')
+      setFormIcon(starterData.icon)
+      setFormNotes(starterData.notes || '')
     } else {
       setFormName('')
       setFormCategory('work')
@@ -86,7 +98,7 @@ export function ActivityFormModal({
       setFormNotes('')
     }
     setValidationError(null)
-  }, [initialData, visible])
+  }, [initialData, starterData, visible])
 
   const handleClose = () => {
     setValidationError(null)
