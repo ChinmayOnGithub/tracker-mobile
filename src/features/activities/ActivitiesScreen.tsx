@@ -16,7 +16,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { Screen } from '@/components/Screen'
 import { OutboxRepository, TemplateRepository } from '@/db/repository'
 import { withSafeTransaction } from '@/db/transaction'
-import { colors, normalizeColor, spacing, typography } from '@/theme/tokens'
+import { colors, normalizeColor, radius, spacing, typography } from '@/theme/tokens'
 import { fastCache } from '@/utils/dataCache'
 import { appEvents } from '@/utils/events'
 import { ActivityCard } from './components/ActivityCard'
@@ -33,9 +33,9 @@ function generateLocalUuid(): string {
 }
 
 const ACTIVITY_STARTERS: (ActivityStarterPreset & { id: string; description: string })[] = [
-  { id: 'water', name: 'Water intake', description: 'Build a hydration habit', category: 'health', icon: 'droplets', color: '#38bdf8' },
+  { id: 'water', name: 'Water intake', description: 'Build a hydration habit', category: 'health', icon: 'droplet', color: '#38bdf8' },
   { id: 'fuel', name: 'Fuel refill', description: 'Track fuel expenses', category: 'finance', icon: 'fuel', color: '#f59e0b' },
-  { id: 'jogging', name: 'Jogging / Running', description: 'Build a running routine', category: 'fitness', icon: 'footprints', color: '#10b981' },
+  { id: 'jogging', name: 'Jogging / Running', description: 'Build a running routine', category: 'fitness', icon: 'activity', color: '#10b981' },
   { id: 'workout', name: 'Workout', description: 'Track exercise sessions', category: 'fitness', icon: 'dumbbell', color: '#8b5cf6' },
   { id: 'reading', name: 'Reading', description: 'Make time for books', category: 'learning', icon: 'book-open', color: '#6366f1' },
   { id: 'sleep', name: 'Sleep', description: 'Track your sleep routine', category: 'health', icon: 'moon', color: '#8b5cf6' },
